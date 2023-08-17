@@ -4,20 +4,23 @@
 CURRENT_TIMESTAMP=$(date +%F-%T)
 export CURRENT_TIMESTAMP # 让这个变量对子脚本和函数可见
 
-source ./bash/dis.sh
-source ./bash/out.sh
-source ./bash/nat.sh
+while read -r line; do
+    if [[ $line =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]]; then
+        IP_ARRAY+=("$line")
+    fi
+done < ip.txt
+export IP_ARRAY # 让这个变量对子脚本和函数可见
+
+
+source ./bash/common_functions.sh
+
 
 # 主函数
 main(){
+	#初始化函数
+	initialize
 
-	# 定义需要的参数值
-	local path="/data"
-	local dis_ip="./ip/dis.ip"
-	local out_ip="./ip/out.ip"
-	local nat_ip="./ip/nat.ip"
-	local sleep_time="2"
-	local sleep_time_hcs="5"
+
 
 	# 输出功能菜单
 	printf "%15s移动4G3.0合成巡检脚本功能菜单\n"
@@ -34,15 +37,15 @@ main(){
 	case ${num1} in
 		"1")
 			# 巡检dis服务器
-			dis_server "${path}" "${dis_ip}" "${sleep_time}" "${sleep_time_hcs}"
+			
 			;;
 		"2")
 			# 巡检out服务器
-			out_server "${path}" "${out_ip}" "${sleep_time}" "${sleep_time_hcs}"
+			
 			;;
 		"3")
 			# 巡检nat服务器
-			nat_server "${path}" "${nat_ip}" "${sleep_time}" "${sleep_time_hcs}"
+			
 			;;
 		"0")
 			# 退出程序

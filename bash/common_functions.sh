@@ -73,76 +73,96 @@ log_output() {
     done <<< "$system_output"
 }
 
+# 存储的配置文件路径
+OUTPUT_CFG="./bash/server_type.cfg"
+
+# 检查是否需要初始化
+initialize() {
+    # 检查$OUTPUT_CFG是否存在
+    if [[ ! -f $OUTPUT_CFG ]]; then
+        echo "正在初始化..."
+        touch $OUTPUT_CFG    # 创建配置文件
+        get_server_type
+        echo "初始化完成。"
+    else
+        echo "$OUTPUT_CFG 文件已存在，无需初始化。"
+    fi
+    display_statistics
+}
 
 # 函数：获取服务器上的进程并确定服务器类型
 get_server_type() {
     # 导入配置文件
     source ./bash/cmcc_hcs.cfg
 
-    local target_ip="$1"
+    for target_ip in "${IP_ARRAY[@]}"; do
+        # 通过远程命令获取所有需要的进程信息
+        local processes=$(ssh "${target_ip}" "ps -ef | grep ${BASE_PATH}" | grep -vE 'grep|xunjian|hcsmonit|cp ' | awk '{print $8}' | awk -F'/' '{print $NF, $(NF-2)}')
     
-    # 通过远程命令获取所有需要的进程信息
-    local processes=$(ssh "${target_ip}" "ps -ef | grep ${BASE_PATH}" | grep -vE 'grep|xunjian|hcsmonit|cp ' | awk '{print $8}' | awk -F'/' '{print $NF, $(NF-2)}')
-    
-    local proc_names=""
-    local server_type="UNKNOWN"
-    local log_paths=""
-    local cfg_paths=""
+        local proc_names=""
+        local server_type="UNKNOWN"
+        local log_paths=""
+        local cfg_paths=""
 
-    # 遍历获取的进程列表，检查其对应的日志路径是否存在
-    while IFS=' ' read -r process proc_path; do
-        local log_path_var="${process}_log_path"
+        # 遍历获取的进程列表，检查其对应的日志路径是否存在
+        while IFS=' ' read -r process proc_path; do
+            local log_path_var="${process}_log_path"
         
-        # 只处理存在于配置文件中的进程
-        if [ -n "${!log_path_var}" ]; then
-            proc_names="${proc_names}${process},"
-            log_paths="${log_paths}${BASE_PATH}/${proc_path}/${!log_path_var},"
-            local cfg_path_var="${process}_cfg_path"
-            cfg_paths="${cfg_paths}${BASE_PATH}/${proc_path}/${!cfg_path_var},"
+            # 只处理存在于配置文件中的进程
+            if [ -n "${!log_path_var}" ]; then
+                proc_names="${proc_names}${process},"
+                log_paths="${log_paths}${BASE_PATH}/${proc_path}/${!log_path_var},"
+                local cfg_path_var="${process}_cfg_path"
+                cfg_paths="${cfg_paths}${BASE_PATH}/${proc_path}/${!cfg_path_var},"
+            fi
+        done <<< "$processes"
+
+        proc_names=${proc_names%,}  # 删除最后的逗号
+
+        # 根据进程名称确定服务器类型
+        server_type=$(determine_server_type "$proc_names")
+
+        # 如果配置文件中已存在相关的变量，则使用sed更新这些变量
+        # 如果不存在，则直接追加新内容
+        if grep -q "${target_ip}_TYPE=" $OUTPUT_CFG; then
+            sed -i "s|${target_ip}_TYPE=.*|${target_ip}_TYPE=${server_type}|g" $OUTPUT_CFG
+            sed -i "s|${target_ip}_PROCESSES=.*|${target_ip}_PROCESSES=${proc_names}|g" $OUTPUT_CFG
+            sed -i "s|${target_ip}_LOG_PATHS=.*|${target_ip}_LOG_PATHS=${log_paths%,}|g" $OUTPUT_CFG
+            sed -i "s|${target_ip}_CFG_PATHS=.*|${target_ip}_CFG_PATHS=${cfg_paths%,}|g" $OUTPUT_CFG
+        else
+            echo "${target_ip}_TYPE=${server_type}" >> $OUTPUT_CFG
+            echo "${target_ip}_PROCESSES=${proc_names}" >> $OUTPUT_CFG
+            echo "${target_ip}_LOG_PATHS=${log_paths%,}" >> $OUTPUT_CFG
+            echo "${target_ip}_CFG_PATHS=${cfg_paths%,}" >> $OUTPUT_CFG
         fi
-    done <<< "$processes"
-
-    proc_names=${proc_names%,}  # 删除最后的逗号
-
-    # 根据进程名称确定服务器类型
-    determine_server_type "$proc_names"
-
-    # 如果配置文件中已存在相关的变量，则使用sed更新这些变量
-    # 如果不存在，则直接追加新内容
-    if grep -q "${target_ip}_TYPE=" $OUTPUT_CFG; then
-        sed -i "s|${target_ip}_TYPE=.*|${target_ip}_TYPE=${server_type}|g" $OUTPUT_CFG
-        sed -i "s|${target_ip}_PROCESSES=.*|${target_ip}_PROCESSES=${proc_names}|g" $OUTPUT_CFG
-        sed -i "s|${target_ip}_LOG_PATHS=.*|${target_ip}_LOG_PATHS=${log_paths%,}|g" $OUTPUT_CFG
-        sed -i "s|${target_ip}_CFG_PATHS=.*|${target_ip}_CFG_PATHS=${cfg_paths%,}|g" $OUTPUT_CFG
-    else
-        echo "${target_ip}_TYPE=${server_type}" >> $OUTPUT_CFG
-        echo "${target_ip}_PROCESSES=${proc_names}" >> $OUTPUT_CFG
-        echo "${target_ip}_LOG_PATHS=${log_paths%,}" >> $OUTPUT_CFG
-        echo "${target_ip}_CFG_PATHS=${cfg_paths%,}" >> $OUTPUT_CFG
-    fi
+    done
 }
 
 
 # 函数：根据进程名称确定服务器类型
 determine_server_type() {
     local processes="$1"
+    local result_server_type
+
     if [[ $processes == *"hcsdis"* ]]; then
         if [[ $processes == *"hcs_redis_server"* ]]; then
-            server_type="DIS_WITH_REDIS"
+            result_server_type="DIS_WITH_REDIS"
         else
-            server_type="DIS"
+            result_server_type="DIS"
         fi
     elif [[ $processes == *"hcsnat"* ]]; then
         if [[ $processes == *"hcsredis_nat_server"* ]]; then
-            server_type="NAT_WITH_REDISNAT"
+            result_server_type="NAT_WITH_REDISNAT"
         else
-            server_type="NAT"
+            result_server_type="NAT"
         fi
     elif [[ $processes == *"hcsout"* ]]; then
-        server_type="OUT"
+        result_server_type="OUT"
     else
-        server_type="UNKNOWN"
+        result_server_type="UNKNOWN"
     fi
+
+    echo "$result_server_type"
 }
 
 

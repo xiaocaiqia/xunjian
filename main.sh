@@ -10,8 +10,6 @@ source ./bash/nat.sh
 
 # 主函数
 main(){
-	# 在脚本开头获取时间戳
-	CURRENT_TIMESTAMP=$(date +%F-%T)
 
 	# 定义需要的参数值
 	local path="/data"

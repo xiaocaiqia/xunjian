@@ -73,8 +73,6 @@ log_output() {
     done <<< "$system_output"
 }
 
-# 存储的配置文件路径
-OUTPUT_CFG="./bash/server_type.cfg"
 
 # 函数：获取服务器上的进程并确定服务器类型
 get_server_type() {

@@ -93,11 +93,17 @@ initialize() {
 # 函数：获取服务器上的进程并确定服务器类型
 get_server_type() {
     # 导入配置文件
-    source ./bash/cmcc_hcs.cfg
+    source ./cmcc_hcs.cfg
+
+    while read -r line; do
+        if [[ $line =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]]; then
+            IP_ARRAY+=("$line")
+        fi
+    done < ip.txt
 
     for target_ip in "${IP_ARRAY[@]}"; do
         # 通过远程命令获取所有需要的进程信息
-        local processes=$(ssh "${target_ip}" "ps -ef | grep ${BASE_PATH}" | grep -vE 'grep|xunjian|hcsmonit|cp ' | awk '{print $8}' | awk -F'/' '{print $NF, $(NF-2)}')
+        local processes=$(ssh "${target_ip}" "ps -ef | grep ${BASE_PATH}/" | grep -vE 'grep|xunjian|hcsmonit|cp ' | awk '{print $8}' | awk -F'/' '{print $NF, $(NF-2)}')
     
         local proc_names=""
         local server_type="UNKNOWN"

@@ -5,6 +5,7 @@ source ./bash/common_functions.sh   # 导入通用函数，如execute_commands
 # system_disk_space 函数
 # 功能：远程连接服务器，获取磁盘使用情况，并调用 log_output 输出到日志文件。
 system_disk_space() {
+    local ip="$1"  # 使用传入的参数设置本地变量ip
     # 定义要检查的项目名称
     local check_items="disk_space"
     # 定义警告阈值
@@ -32,6 +33,7 @@ system_disk_space() {
 # system_date函数
 # 功能：检查远程服务器的系统时间与当前服务器的时间差，并将结果输出到日志文件。
 system_date(){
+    local ip="$1"  # 使用传入的参数设置本地变量ip
     # 定义要检查的项目名称
     local check_items="date"
     # 定义警告阈值
@@ -65,6 +67,7 @@ start_time="00:00:01"
 # system_cpu函数
 # 功能：检查远程服务器的CPU使用率，并将结果输出到日志文件。
 system_cpu(){
+    local ip="$1"  # 使用传入的参数设置本地变量ip
     # 定义要检查的项目名称
     local check_items="cpu"
     # 定义警告阈值
@@ -92,6 +95,7 @@ system_cpu(){
 # system_mem函数
 # 功能：检查远程服务器的内存使用率，并将结果输出到日志文件。
 system_mem(){
+    local ip="$1"  # 使用传入的参数设置本地变量ip
     # 定义要检查的项目名称
     local check_items="mem"
     # 定义警告阈值
@@ -120,6 +124,7 @@ system_mem(){
 # system_disk_io函数
 # 功能：检查远程服务器的磁盘IO使用率，并将结果输出到日志文件。
 system_disk_io(){
+    local ip="$1"  # 使用传入的参数设置本地变量ip
     # 定义要检查的项目名称
     local check_items="disk_io"
     # 定义警告阈值
@@ -147,6 +152,7 @@ system_disk_io(){
 # cpu_mem_io函数
 # 功能：检查远程服务器是否安装了sysstat。如果已安装，则分别检查cpu、mem和disk_io的使用率。若未安装，则向日志中输出错误信息。
 cpu_mem_io(){
+    local ip="$1"  # 使用传入的参数设置本地变量ip
     # 使用ssh远程查询是否安装了sysstat
     local sar_installed=$(ssh ${ip} "rpm -qa sysstat")
 
@@ -164,8 +170,8 @@ cpu_mem_io(){
 
     else
         # 如果安装了sysstat，则分别检查cpu、mem和disk_io的使用率
-        system_cpu
-        system_mem
-        system_disk_io
+        system_cpu $ip
+        system_mem $ip
+        system_disk_io $ip
     fi
 }

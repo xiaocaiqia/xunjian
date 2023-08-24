@@ -1,6 +1,7 @@
 #!/bin/bash
 
 source ./bash/system.sh
+source ./bash/hcs.sh
 
 # 二级菜单函数
 secondary_menu() {
@@ -21,10 +22,11 @@ secondary_menu() {
                 system_date "$system_target_ip"
                 cpu_mem_io "$system_target_ip"
             done
+            print_result
             ;;
         2)
             # 在这里添加巡检hcs程序的代码
-            echo "正在对以下服务器进行hcs程序巡检：${servers[@]}"
+            check_hcs_programs "${servers[@]}"
             ;;
         3)
             # 在这里添加巡检全部的代码

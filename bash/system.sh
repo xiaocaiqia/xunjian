@@ -105,7 +105,7 @@ system_mem(){
     local mem_info=$(ssh ${ip} "LANG=C sar -r -s ${start_time}")
     
     # 使用awk解析sar命令的输出
-    local mem_usage=$(echo "$mem_info" | awk '
+    local mem_usage=$(echo "$mem_info" | awk -v ip="$ip" -v check_items="$check_items" '
     {
         # 从sar输出中获取相关字段计算内存使用率
         if (NR >= 4){
@@ -113,7 +113,7 @@ system_mem(){
             use=($3-$5-$6)/($2+$3)*100
             
             # 格式化输出结果
-            printf "%s %s %s %s %d%%\n", "'"${ip}"'", check_items, "NONE", $1, use
+            printf "%s %s %s %s %d%%\n", ip, check_items, "NONE", $1, use
         }
     }')
 
@@ -134,14 +134,14 @@ system_disk_io(){
     local disk_io_info=$(ssh ${ip} "LANG=C sar -d -p -s ${start_time}")
     
     # 使用awk解析sar命令的输出
-    local disk_io_usage=$(echo "$disk_io_info" | awk '
+    local disk_io_usage=$(echo "$disk_io_info" | awk -v ip="$ip" -v check_items="$check_items" '
     {
         # 从sar输出中获取磁盘IO使用率
         if (NR >= 4){
             use=$10
             
             # 格式化输出结果
-            printf "%s %s %s %s %d%%\n", "'"${ip}"'", check_items, $2, $1, use
+            printf "%s %s %s %s %d%%\n", ip, check_items, $2, $1, use
         }
     }')
 
@@ -162,7 +162,7 @@ cpu_mem_io(){
         local no_sysstat_info=$(awk 'BEGIN {
             check_items="not_sysstat"
             # 格式化输出结果
-            printf "%s %s %s %s %s\n", "'"${ip}"'", check_items, "NONE", "NONE", "100"
+            printf "%s %s %s %s %s\n", "'"${ip}"'", check_items, "NONE", "NONE", "80"
         }')
 
         # 使用log_output函数处理并输出结果，这里使用10作为阈值，确保红色显示

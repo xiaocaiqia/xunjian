@@ -1,20 +1,33 @@
 #!/bin/bash
 
-# 如果这个脚本被直接执行而不是被source，那么退出。
-[[ "$0" == "${BASH_SOURCE[0]}" ]] && { echo "请不要直接执行这个脚本"; exit 1; }
+# 仅允许该脚本被source执行
+if [[ "$0" == "${BASH_SOURCE[0]}" ]]; then
+    echo "请不要直接执行这个脚本"
+    exit 1
+fi
 
+initialize_environment() {
+    local current_timestamp=$(date +%Y%m%d%H%M%S)
+    local log_dir="./log"
+    xunjian_log="${log_dir}/${current_timestamp}.log"
+    xunjian_error_log="${log_dir}/${current_timestamp}_error.log"
+
+    mkdir -p "$log_dir"
+
+    export xunjian_log
+    export xunjian_error_log
+
+}
+
+initialize_environment
 
 # execute_commands 函数
 # 功能：对每个IP执行指定的命令，并在每次执行完一组命令后休眠指定的时间。
 execute_commands(){
-    # 参数1: IP 文件
-    # 参数2: 休眠时间
-    # 参数3: hcs程序路径
-    # 参数4及以后: 要执行的函数
 
-    local ip_file="$1"           # IP文件路径
-    local sleep_duration="$2"   # 休眠时间
-    local ps_hcs_path="$3"      # hcs程序路径
+    local ip_file="${1:-default_ip_file}"       # IP文件路径
+    local sleep_duration="${2:-0}"              # 休眠时间
+    local ps_hcs_path="${3:-default_path}"      # hcs程序路径
     shift 3                     # 移除前三个参数，后面的参数都是要执行的函数
     local commands=("$@")       # 获取所有要执行的函数为一个数组
 
@@ -35,18 +48,8 @@ execute_commands(){
 log_output() {
     # 参数1: system的输出
     # 参数2: 阈值
-    local system_output="$1"
-    local threshold="$2"
-
-    # 定义颜色
-    local RED="\033[31m"
-    local GREEN="\033[32m"
-    local NONE="\033[0m"
-
-    # 定义日志目录和文件路径
-    local LOG_DIR="./log"
-    local xunjian_log="${LOG_DIR}/xunjian_log_${CURRENT_TIMESTAMP}"
-    local xunjian_error_log="${LOG_DIR}/xunjian_error_log_${CURRENT_TIMESTAMP}"
+    local system_output="${1:-}"
+    local threshold="${2:-0}"
 
     # 处理每一行的 awk 输出
     while IFS= read -r line; do
@@ -54,38 +57,31 @@ log_output() {
         IFS=' ' read -r -a parts <<< "$line"
         # 获取使用率，去除 '%' 字符
         local use_num="${parts[4]//[^0-9]/}"
-
-        # 默认为绿色字体和日志文件
-        local target_log="$xunjian_log"
-        local color="$GREEN"
         
         # 如果使用率超过阈值则先输出到全量日志文件，然后选择红色字体和错误日志文件
         if (( $use_num > $threshold )); then
-            printf "[%s] %-15s%-15s%-30s%-30s${color}%s${NONE}\n" \
-               "$(date '+%Y-%m-%d %H:%M:%S')" "${parts[0]}" "${parts[1]}" "${parts[2]}" "${parts[3]}" "${parts[4]}" >> "$target_log"
-            target_log="$xunjian_error_log"
-            color="$RED"
+            printf "[%s]   %-20s%-20s%-30s%-30s%s\n" \
+               "$(date '+%Y-%m-%d %H:%M:%S')" "${parts[0]}" "${parts[1]}" "${parts[2]}" "${parts[3]}" "${parts[4]}" >> "$xunjian_error_log"
         fi
 
         # 格式化输出到相应的日志文件
-        printf "[%s] %-15s%-15s%-30s%-30s${color}%s${NONE}\n" \
-               "$(date '+%Y-%m-%d %H:%M:%S')" "${parts[0]}" "${parts[1]}" "${parts[2]}" "${parts[3]}" "${parts[4]}" >> "$target_log"
+        printf "[%s]   %-20s%-20s%-30s%-30s%s\n" \
+               "$(date '+%Y-%m-%d %H:%M:%S')" "${parts[0]}" "${parts[1]}" "${parts[2]}" "${parts[3]}" "${parts[4]}" >> "$xunjian_log"
     done <<< "$system_output"
 }
 
-# 存储的配置文件路径
-OUTPUT_CFG="./bash/server_type.cfg"
 
 # 检查是否需要初始化
 initialize() {
-    # 检查$OUTPUT_CFG是否存在
-    if [[ ! -f $OUTPUT_CFG ]]; then
+    local output_cfg="./bash/server_type.cfg"
+    # 检查$output_cfg是否存在
+    if [[ ! -f $output_cfg ]]; then
         echo "正在初始化..."
-        touch $OUTPUT_CFG    # 创建配置文件
+        touch $output_cfg    # 创建配置文件
         get_server_type
         echo "初始化完成。"
     else
-        echo "$OUTPUT_CFG 文件已存在，无需初始化。"
+        echo "$output_cfg 文件已存在，无需初始化。"
     fi
     display_statistics
 }
@@ -93,7 +89,9 @@ initialize() {
 # 函数：获取服务器上的进程并确定服务器类型
 get_server_type() {
     # 导入配置文件
-    source ./cmcc_hcs.cfg
+    local cmcc_hcs_config="./cmcc_hcs.cfg"
+    source "$cmcc_hcs_config"
+    local ip_array=()
 
     while read -r line; do
         if [[ $line =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]]; then
@@ -130,16 +128,16 @@ get_server_type() {
 
         # 如果配置文件中已存在相关的变量，则使用sed更新这些变量
         # 如果不存在，则直接追加新内容
-        if grep -q "${target_ip}_TYPE=" $OUTPUT_CFG; then
-            sed -i "s|${target_ip}_TYPE=.*|${target_ip}_TYPE=${server_type}|g" $OUTPUT_CFG
-            sed -i "s|${target_ip}_PROCESSES=.*|${target_ip}_PROCESSES=${proc_names}|g" $OUTPUT_CFG
-            sed -i "s|${target_ip}_LOG_PATHS=.*|${target_ip}_LOG_PATHS=${log_paths%,}|g" $OUTPUT_CFG
-            sed -i "s|${target_ip}_CFG_PATHS=.*|${target_ip}_CFG_PATHS=${cfg_paths%,}|g" $OUTPUT_CFG
+        if grep -q "${target_ip}_TYPE=" $output_cfg; then
+            sed -i "s|${target_ip}_TYPE=.*|${target_ip}_TYPE=${server_type}|g" $output_cfg
+            sed -i "s|${target_ip}_PROCESSES=.*|${target_ip}_PROCESSES=${proc_names}|g" $output_cfg
+            sed -i "s|${target_ip}_LOG_PATHS=.*|${target_ip}_LOG_PATHS=${log_paths%,}|g" $output_cfg
+            sed -i "s|${target_ip}_CFG_PATHS=.*|${target_ip}_CFG_PATHS=${cfg_paths%,}|g" $output_cfg
         else
-            echo "${target_ip}_TYPE=${server_type}" >> $OUTPUT_CFG
-            echo "${target_ip}_PROCESSES=${proc_names}" >> $OUTPUT_CFG
-            echo "${target_ip}_LOG_PATHS=${log_paths%,}" >> $OUTPUT_CFG
-            echo "${target_ip}_CFG_PATHS=${cfg_paths%,}" >> $OUTPUT_CFG
+            echo "${target_ip}_TYPE=${server_type}" >> $output_cfg
+            echo "${target_ip}_PROCESSES=${proc_names}" >> $output_cfg
+            echo "${target_ip}_LOG_PATHS=${log_paths%,}" >> $output_cfg
+            echo "${target_ip}_CFG_PATHS=${cfg_paths%,}" >> $output_cfg
         fi
     done
 }
@@ -147,7 +145,7 @@ get_server_type() {
 
 # 函数：根据进程名称确定服务器类型
 determine_server_type() {
-    local processes="$1"
+    local processes="${1:-}"
     local result_server_type
 
     if [[ $processes == *"hcsdis"* ]]; then
@@ -173,10 +171,11 @@ determine_server_type() {
 
 
 display_statistics() {
+    local output_cfg="./bash/server_type.cfg"
     # 定义关联数组
     declare -A server_types process_combinations individual_processes
 
-    # 读取 OUTPUT_CFG 文件内容
+    # 读取 output_cfg 文件内容
     while IFS="=" read -r key value; do
         # 根据服务器类型统计
         if [[ $key == *_TYPE ]]; then
@@ -191,7 +190,7 @@ display_statistics() {
                 individual_processes[$proc]=$(( ${individual_processes[$proc]} + 1 ))
             done
         fi
-    done < "$OUTPUT_CFG"
+    done < "$output_cfg"
 
     # 输出统计结果
     echo "服务器总数: ${#server_types[@]}"
@@ -216,12 +215,57 @@ display_statistics() {
 }
 
 
+check_hcs_programs() {
+    local servers=("$@")  # 将传入的所有参数作为一个数组
+    local output_cfg="./bash/server_type.cfg"
+    declare -A SERVER_INFO
+
+    while read -r line; do
+        IFS='=' read -ra PARTS <<< "$line"
+        SERVER_INFO["${PARTS[0]}"]="${PARTS[1]}"
+    done < $output_cfg
+
+    for server_ip in "${servers[@]}"; do
+        # 获取服务器类型，进程，日志和配置文件路径
+        local server_type=${SERVER_INFO["${server_ip}_TYPE"]}
+        IFS=',' read -ra server_processes <<< "${SERVER_INFO["${server_ip}_PROCESSES"]}"
+        IFS=',' read -ra log_paths <<< "${SERVER_INFO["${server_ip}_LOG_PATHS"]}"
+        IFS=',' read -ra cfg_paths <<< "${SERVER_INFO["${server_ip}_CFG_PATHS"]}"
+
+        echo "正在巡检服务器：$server_ip, 类型：$server_type"
+
+        # 循环遍历每个进程以进行巡检
+        for index in "${!server_processes[@]}"; do
+            local proc=${server_processes[$index]}
+            local log_path=${log_paths[$index]}
+            local cfg_path=${cfg_paths[$index]}
+
+            echo "正在巡检进程：$proc, 日志路径：$log_path, 配置文件路径：$cfg_path"
+
+            # 调用与进程名匹配的函数来进行巡检
+            # 假设有一个名为 check_hcsserver 的函数用于检查 hcsserver 进程
+            if [ -n "$proc" ]; then
+                function_name="check_$proc"
+                if [ "$(type -t $function_name)" = "function" ]; then
+                    $function_name "$log_path" "$cfg_path"
+                else
+                    echo "警告：没有找到用于检查 $proc 的函数"
+                fi
+            fi
+        done
+    done
+}
 
 
 
 # 根据巡检日志打印巡检结果到屏幕
 print_result(){
-	cat ${xunjian_log}|sort|awk '{print $2,$3,$4,$5,$6}'|awk 'BEGIN {
+    # 定义颜色
+    RED="\033[31m"
+    GREEN="\033[32m"
+    NONE="\033[0m"
+
+	cat ${xunjian_log}|sort|awk '{print $3,$4,$5,$6,$7}'|awk 'BEGIN {
 	}
 	!a[$1$3]++{
 		if($2~"hcs")
@@ -249,7 +293,7 @@ print_result(){
 	}'
 	if [ -e ${xunjian_error_log} ]
 	then
-		cat ${xunjian_error_log}|awk 'BEGIN {
+		cat ${xunjian_error_log}|sort|awk '{print $3,$4,$5,$6,$7}'|awk 'BEGIN {
 		}
 		!a[$1]++{
 			host_num++

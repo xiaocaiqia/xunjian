@@ -27,13 +27,13 @@ check_log_refresh_time() {
     local time_diff=$((current_time - last_mod_time))
 
     # 判断是否应视为 error 日志（这里简单地判断时间差是否大于 600 秒）
-    local is_error=0
+    local is_error="INFO"
     if [ "$time_diff" -gt 600 ]; then
-        is_error=1
+        is_error="ERROR"
     fi
 
     # 构建返回数组
-    local -a result_array=("$server_ip" "$check_items" "$proc_name" "$log_file_name" "$time_diff" "$is_error")
+    local -a result_array=("$server_ip" "$check_items" "$proc_name" "$log_file_name" "${time_diff}s" "$is_error")
     echo "${result_array[@]}"
 }
 

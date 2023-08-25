@@ -17,22 +17,26 @@ system_disk_space() {
     local exclude_pattern=$(IFS="|"; echo "${exclude_mounts[*]}")
 
     # 远程获取服务器的 df 信息并通过 awk 进行处理
-    local awk_output=$(ssh ${ip} "df -m" | awk -v ip="$ip" -v check_items="$check_items" -v exclude="$exclude_pattern" '
+    local awk_output=$(ssh ${ip} "df -m" | awk -v ip="$ip" -v check_items="$check_items" -v exclude="$exclude_pattern" -v threshold="$threshold" '
     {
         # 如果不是第一行（标题行）、第二列为空、最后一列有值且不在排除列表中，则进行处理
         if (NR != 1 && $2 != "" && !($NF ~ exclude)) {
+
+            # 移除 '%' 以将使用率转换为整数
+            gsub(/%/, "", $(NF-1))
+
             # 判断是否超出阈值
             if ($(NF-1) > threshold) {
                 log_level="ERROR"
             } else {
                 log_level="INFO"
             }
-            printf "%s %s %s %s %s %s\n", ip, check_items, $1, $NF, $(NF-1), log_level
+            printf "%s %s %s %s %d%% %s===", ip, check_items, $1, $NF, $(NF-1), log_level
         }
-    }')
+}')
 
     # 将 awk 输出转换为数组
-    IFS=$'\n' read -ra lines <<< "$awk_output"
+    IFS=$'===' read -ra lines <<< "$awk_output"
 
     for line in "${lines[@]}"; do
         IFS=' ' read -ra parts <<< "$line"
@@ -97,11 +101,11 @@ system_cpu(){
             } else {
                 log_level="INFO"
             }
-            printf "%s %s %s %s %d%% %s\n", ip, check_items, "NONE", $1, use, log_level
+            printf "%s %s %s %s %d%% %s===", ip, check_items, "NONE", $1, use, log_level
         }
     }')
 
-    IFS=$'\n' read -ra lines <<< "$awk_output"
+    IFS=$'===' read -ra lines <<< "$awk_output"
     for line in "${lines[@]}"; do
         IFS=' ' read -ra parts <<< "$line"
         log_output "${parts[0]}" "${parts[1]}" "${parts[2]}" "${parts[3]}" "${parts[4]}" "${parts[5]}"
@@ -127,11 +131,11 @@ system_mem(){
             } else {
                 log_level="INFO"
             }
-            printf "%s %s %s %s %d%% %s\n", ip, check_items, "NONE", $1, use, log_level
+            printf "%s %s %s %s %d%% %s===", ip, check_items, "NONE", $1, use, log_level
         }
     }')
 
-    IFS=$'\n' read -ra lines <<< "$awk_output"
+    IFS=$'===' read -ra lines <<< "$awk_output"
     for line in "${lines[@]}"; do
         IFS=' ' read -ra parts <<< "$line"
         log_output "${parts[0]}" "${parts[1]}" "${parts[2]}" "${parts[3]}" "${parts[4]}" "${parts[5]}"
@@ -157,11 +161,11 @@ system_disk_io(){
             } else {
                 log_level="INFO"
             }
-            printf "%s %s %s %s %d%% %s\n", ip, check_items, $2, $1, use, log_level
+            printf "%s %s %s %s %d%% %s===", ip, check_items, $2, $1, use, log_level
         }
     }')
 
-    IFS=$'\n' read -ra lines <<< "$awk_output"
+    IFS=$'===' read -ra lines <<< "$awk_output"
     for line in "${lines[@]}"; do
         IFS=' ' read -ra parts <<< "$line"
         log_output "${parts[0]}" "${parts[1]}" "${parts[2]}" "${parts[3]}" "${parts[4]}" "${parts[5]}"
@@ -181,11 +185,14 @@ cpu_mem_io(){
         local no_sysstat_info=$(awk 'BEGIN {
             check_items="not_sysstat"
             # 格式化输出结果
-            printf "%s %s %s %s %s %s\n", "'"${ip}"'", check_items, "NONE", "NONE", "NONE", "ERROR"
+            printf "%s %s %s %s %s %s===", "'"${ip}"'", check_items, "NONE", "NONE", "NONE", "ERROR"
         }')
 
-        # 使用log_output函数处理并输出结果，这里使用10作为阈值，确保红色显示
-        log_output "$no_sysstat_info"
+        IFS=$'===' read -ra lines <<< "$no_sysstat_info"
+    for line in "${lines[@]}"; do
+        IFS=' ' read -ra parts <<< "$line"
+        log_output "${parts[0]}" "${parts[1]}" "${parts[2]}" "${parts[3]}" "${parts[4]}" "${parts[5]}"
+    done
 
     else
         # 如果安装了sysstat，则分别检查cpu、mem和disk_io的使用率

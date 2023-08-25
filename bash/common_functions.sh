@@ -53,14 +53,19 @@ log_output() {
     local time_diff="$5"
     local log_level="$6"  # 这里接受 "INFO" 或 "ERROR"
 
+    # 判断第6个参数是否为空
+    if [ -z "$log_level" ]; then
+        return
+    fi
+
     # 使用 printf 对各字段进行格式化
-    printf "[%s][%-6s]   %-20s%-20s%-30s%-30s%-10s\n" \
-           "$(date '+%Y-%m-%d %H:%M:%S')" "$log_level" "$server_ip" "$check_items" "$proc_name" "$log_file_name" "$time_diff" >> "$xunjian_log"
+    printf "[%s]   %-9s%-20s%-20s%-30s%-30s%-10s\n" \
+           "$(date '+%Y-%m-%d %H:%M:%S')" "[$log_level]" "$server_ip" "$check_items" "$proc_name" "$log_file_name" "$time_diff" >> "$xunjian_log"
 
     # 如果是错误，也输出到错误日志
     if [ "$log_level" == "ERROR" ]; then
-        printf "[%s][%-6s]   %-20s%-20s%-30s%-30s%-10s\n" \
-               "$(date '+%Y-%m-%d %H:%M:%S')" "$log_level" "$server_ip" "$check_items" "$proc_name" "$log_file_name" "$time_diff" >> "$xunjian_error_log"
+        printf "[%s]   %-9s%-20s%-20s%-30s%-30s%-10s\n" \
+            "$(date '+%Y-%m-%d %H:%M:%S')" "[$log_level]" "$server_ip" "$check_items" "$proc_name" "$log_file_name" "$time_diff" >> "$xunjian_error_log"
     fi
 }
 
@@ -260,7 +265,7 @@ print_result(){
     GREEN="\033[32m"
     NONE="\033[0m"
 
-	cat ${xunjian_log}|sort|awk '{print $3,$4,$5,$6,$7}'|awk 'BEGIN {
+	cat ${xunjian_log}|sort|awk '{print $4,$5,$6,$7,$8}'|awk 'BEGIN {
 	}
 	!a[$1$3]++{
 		if($2~"hcs")
@@ -288,7 +293,7 @@ print_result(){
 	}'
 	if [ -e ${xunjian_error_log} ]
 	then
-		cat ${xunjian_error_log}|sort|awk '{print $3,$4,$5,$6,$7}'|awk 'BEGIN {
+		cat ${xunjian_error_log}|sort|awk '{print $4,$5,$6,$7,$8}'|awk 'BEGIN {
 		}
 		!a[$1]++{
 			host_num++

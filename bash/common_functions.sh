@@ -44,31 +44,26 @@ execute_commands(){
 
 
 # log_output 函数
-# 功能：处理传入的数据，判断是否超过阈值，并以适当的颜色输出到日志文件。
+# 功能：处理传入的数据，判断是否超过阈值，输出到日志文件。
 log_output() {
-    # 参数1: system的输出
-    # 参数2: 阈值
-    local system_output="${1:-}"
-    local threshold="${2:-0}"
+    local server_ip="$1"
+    local check_items="$2"
+    local proc_name="$3"
+    local log_file_name="$4"
+    local time_diff="$5"
+    local log_level="$6"  # 这里接受 "INFO" 或 "ERROR"
 
-    # 处理每一行的 awk 输出
-    while IFS= read -r line; do
-        # 将每行分成数组
-        IFS=' ' read -r -a parts <<< "$line"
-        # 获取使用率，去除 '%' 字符
-        local use_num="${parts[4]//[^0-9]/}"
-        
-        # 如果使用率超过阈值则先输出到全量日志文件，然后选择红色字体和错误日志文件
-        if (( $use_num > $threshold )); then
-            printf "[%s]   %-20s%-20s%-30s%-30s%s\n" \
-               "$(date '+%Y-%m-%d %H:%M:%S')" "${parts[0]}" "${parts[1]}" "${parts[2]}" "${parts[3]}" "${parts[4]}" >> "$xunjian_error_log"
-        fi
+    # 使用 printf 对各字段进行格式化
+    printf "[%s][%-6s]   %-20s%-20s%-30s%-30s%-10s\n" \
+           "$(date '+%Y-%m-%d %H:%M:%S')" "$log_level" "$server_ip" "$check_items" "$proc_name" "$log_file_name" "$time_diff" >> "$xunjian_log"
 
-        # 格式化输出到相应的日志文件
-        printf "[%s]   %-20s%-20s%-30s%-30s%s\n" \
-               "$(date '+%Y-%m-%d %H:%M:%S')" "${parts[0]}" "${parts[1]}" "${parts[2]}" "${parts[3]}" "${parts[4]}" >> "$xunjian_log"
-    done <<< "$system_output"
+    # 如果是错误，也输出到错误日志
+    if [ "$log_level" == "ERROR" ]; then
+        printf "[%s][%-6s]   %-20s%-20s%-30s%-30s%-10s\n" \
+               "$(date '+%Y-%m-%d %H:%M:%S')" "$log_level" "$server_ip" "$check_items" "$proc_name" "$log_file_name" "$time_diff" >> "$xunjian_error_log"
+    fi
 }
+
 
 
 # 检查是否需要初始化
@@ -247,7 +242,7 @@ check_hcs_programs() {
             if [ -n "$proc" ]; then
                 function_name="check_$proc"
                 if [ "$(type -t $function_name)" = "function" ]; then
-                    $function_name "$log_path" "$cfg_path"
+                    $function_name "$server_ip" "$log_path" "$cfg_path"
                 else
                     echo "警告：没有找到用于检查 $proc 的函数"
                 fi

@@ -8,7 +8,7 @@ secondary_menu() {
     local servers=("$@") # 将传入的所有参数作为一个数组
     printf "二级巡检菜单\n"
     printf "%7s1.巡检系统资源\n"
-    printf "%7s2.巡检hcs程序\n"
+    printf "%7s2.巡检合成程序\n"
     printf "%7s3.巡检系统资源和hcs程序\n"
     printf "%7s0.返回上级菜单\n"
     printf "请输入功能编号："

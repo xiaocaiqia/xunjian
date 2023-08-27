@@ -53,6 +53,11 @@ log_output() {
     local time_diff="$5"
     local log_level="$6"  # 这里接受 "INFO" 或 "ERROR"
 
+    # 检查是否包含 BASE64: 前缀，并进行解码
+    if [[ $time_diff == BASE64:* ]]; then
+        time_diff=$(echo -n "${time_diff:7}" | base64 --decode)
+    fi
+
     # 判断第6个参数是否为空
     if [ -z "$log_level" ]; then
         return
@@ -74,15 +79,26 @@ log_output() {
 # 检查是否需要初始化
 initialize() {
     local output_cfg="./bash/server_type.cfg"
+    local items_cfg_file="./bash/items_config.cfg"
     # 检查$output_cfg是否存在
     if [[ ! -f $output_cfg ]]; then
-        echo "正在初始化..."
+        echo "正在初始化${output_cfg}..."
         touch $output_cfg    # 创建配置文件
         get_server_type
-        echo "初始化完成。"
+        
+        echo "${output_cfg}初始化完成。"
     else
         echo "$output_cfg 文件已存在，无需初始化。"
     fi
+    if [[ ! -f $items_cfg_file ]]; then
+        echo "正在初始化${items_cfg_file}..."
+        touch $items_cfg_file    # 创建配置文件
+        get_and_save_config
+        echo "${items_cfg_file}初始化完成。"
+    else
+        echo "$items_cfg_file 文件已存在，无需初始化。"
+    fi
+    echo ""
     display_statistics
 }
 
@@ -232,6 +248,7 @@ check_hcs_programs() {
         IFS=',' read -ra log_paths <<< "${SERVER_INFO["${server_ip}_LOG_PATHS"]}"
         IFS=',' read -ra cfg_paths <<< "${SERVER_INFO["${server_ip}_CFG_PATHS"]}"
 
+        echo ""
         echo "正在巡检服务器：$server_ip, 类型：$server_type"
 
         # 循环遍历每个进程以进行巡检
@@ -256,6 +273,86 @@ check_hcs_programs() {
     done
 }
 
+
+# 函数：从远程服务器的指定的cfg文件获取指定的配置项
+get_remote_config_value() {
+    local ip=$1
+    local cfg_file=$2
+    local config_item=$3
+    local config_value=$(ssh $ip "cat $cfg_file" | awk -F'= *' -v item="$config_item" '{gsub(/^[ \t]+|[ \t]+$/, "", $1); if ($1 == item) print $2}')
+    echo "$config_value"
+}
+
+
+# 函数：将获取到的信息保存到新的cfg文件
+save_to_new_cfg() {
+    local ip=$1
+    local process_name=$2
+    local config_item_name=$3
+    local config_value=$4
+
+    local items_cfg_file="./bash/items_config.cfg"
+    echo "${ip}_${process_name}_${config_item_name}=${config_value}" >> $items_cfg_file
+}
+
+# 函数：从server_type.cfg获取进程和相应的配置文件路径
+get_server_info() {
+    local ip=$1
+    local cfg_file="./bash/server_type.cfg"
+    
+    local processes=$(awk -F= -v ip="$ip" '$1 == ip"_PROCESSES" {print $2}' $cfg_file)
+    local cfg_paths=$(awk -F= -v ip="$ip" '$1 == ip"_CFG_PATHS" {print $2}' $cfg_file)
+
+    echo "$processes"
+    echo "$cfg_paths"
+}
+
+# 函数：从cmcc_hcs.cfg获取指定进程的配置项
+get_hcs_items() {
+    local process_name=$1
+    local cmcc_hcs_file="./cmcc_hcs.cfg"
+    source $cmcc_hcs_file
+    
+    local var_name="${process_name}_items"
+    echo ${!var_name}
+}
+
+
+# 主函数：获取并保存配置信息
+get_and_save_config() {
+    # 从 server_type.cfg 获取所有 IP 地址
+    local all_ips=$(awk -F= '/_TYPE/ {split($1, a, "_"); print a[1]}' bash/server_type.cfg | sort -u)
+
+    # 遍历每一个 IP 地址
+    for ip in $all_ips; do
+        read -r processes cfg_paths <<< $(get_server_info $ip)
+
+        # 分割字符串为数组
+        IFS=',' read -ra process_array <<< "$processes"
+        IFS=',' read -ra cfg_path_array <<< "$cfg_paths"
+
+        # 遍历进程和相应的配置文件路径
+        for index in "${!process_array[@]}"; do
+            process="${process_array[index]}"
+            cfg_path="${cfg_path_array[index]}"
+      
+            # 获取此进程在 cmcc_hcs.cfg 中定义的需要检查的配置项
+            hcs_items=$(get_hcs_items $process)
+      
+            # 分割 hcs_items 为数组
+            IFS=',' read -ra hcs_items_array <<< "$hcs_items"
+      
+            # 遍历需要检查的配置项
+            for item in "${hcs_items_array[@]}"; do
+                # 获取远程服务器上的配置项的值
+                config_value=$(get_remote_config_value $ip $cfg_path $item)
+        
+                # 保存到新的 cfg 文件
+                save_to_new_cfg $ip $process $item $config_value
+            done
+        done
+    done
+}
 
 
 # 根据巡检日志打印巡检结果到屏幕

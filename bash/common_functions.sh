@@ -21,28 +21,6 @@ initialize_environment() {
 
 initialize_environment
 
-# execute_commands 函数
-# 功能：对每个IP执行指定的命令，并在每次执行完一组命令后休眠指定的时间。
-execute_commands(){
-
-    local ip_file="${1:-default_ip_file}"       # IP文件路径
-    local sleep_duration="${2:-2}"              # 休眠时间
-    local ps_hcs_path="${3:-default_path}"      # hcs程序路径
-    shift 3                     # 移除前三个参数，后面的参数都是要执行的函数
-    local commands=("$@")       # 获取所有要执行的函数为一个数组
-
-    # 对每个IP执行指定的命令
-    for ip in $(cat "$ip_file"); do
-        for cmd in "${commands[@]}"; do
-            $cmd &              # 并行执行每个命令
-        done
-        sleep $sleep_duration  # 每次执行完一组命令后的休眠时间
-    done
-    wait                       # 等待所有并行命令完成
-    print_result               # 输出结果
-}
-
-
 # log_output 函数
 # 功能：处理传入的数据，判断是否超过阈值，输出到日志文件。
 log_output() {
@@ -52,6 +30,9 @@ log_output() {
     local log_file_name="$4"
     local time_diff="$5"
     local log_level="$6"  # 这里接受 "INFO" 或 "ERROR"
+
+    # 创建一个锁文件
+    local lock_file="./my_log_lock"
 
     # 检查是否包含 BASE64: 前缀，并进行解码
     if [[ $time_diff == BASE64:* ]]; then
@@ -63,15 +44,18 @@ log_output() {
         return
     fi
 
-    # 使用 printf 对各字段进行格式化
-    printf "[%s]   %-9s%-20s%-30s%-30s%-30s%-10s\n" \
-           "$(date '+%Y-%m-%d %H:%M:%S')" "[$log_level]" "$server_ip" "$check_items" "$proc_name" "$log_file_name" "$time_diff" >> "$xunjian_log"
-
-    # 如果是错误，也输出到错误日志
-    if [ "$log_level" == "ERROR" ]; then
+    # 使用 printf 对各字段进行格式化，并通过 flock 加锁
+    (
+        flock -x 200
         printf "[%s]   %-9s%-20s%-30s%-30s%-30s%-10s\n" \
-            "$(date '+%Y-%m-%d %H:%M:%S')" "[$log_level]" "$server_ip" "$check_items" "$proc_name" "$log_file_name" "$time_diff" >> "$xunjian_error_log"
-    fi
+               "$(date '+%Y-%m-%d %H:%M:%S')" "[$log_level]" "$server_ip" "$check_items" "$proc_name" "$log_file_name" "$time_diff" >> "$xunjian_log"
+
+        # 如果是错误，也输出到错误日志
+        if [ "$log_level" == "ERROR" ]; then
+            printf "[%s]   %-9s%-20s%-30s%-30s%-30s%-10s\n" \
+                "$(date '+%Y-%m-%d %H:%M:%S')" "[$log_level]" "$server_ip" "$check_items" "$proc_name" "$log_file_name" "$time_diff" >> "$xunjian_error_log"
+        fi
+    ) 200> $lock_file
 }
 
 
@@ -232,9 +216,8 @@ display_statistics() {
 
 
 check_hcs_programs() {
-    local servers=("$@")  # 将传入的所有参数作为一个数组
+    local server_ip="$1"  # 将传入的所有参数作为一个数组
     local output_cfg="./bash/server_type.cfg"
-    local sleep_duration=2
     declare -A SERVER_INFO
 
     while read -r line; do
@@ -242,37 +225,36 @@ check_hcs_programs() {
         SERVER_INFO["${PARTS[0]}"]="${PARTS[1]}"
     done < $output_cfg
 
-    for server_ip in "${servers[@]}"; do
-        # 获取服务器类型，进程，日志和配置文件路径
-        local server_type=${SERVER_INFO["${server_ip}_TYPE"]}
-        IFS=',' read -ra server_processes <<< "${SERVER_INFO["${server_ip}_PROCESSES"]}"
-        IFS=',' read -ra log_paths <<< "${SERVER_INFO["${server_ip}_LOG_PATHS"]}"
-        IFS=',' read -ra cfg_paths <<< "${SERVER_INFO["${server_ip}_CFG_PATHS"]}"
 
-        echo ""
-        echo "正在巡检服务器：$server_ip, 类型：$server_type"
+    # 获取服务器类型，进程，日志和配置文件路径
+    local server_type=${SERVER_INFO["${server_ip}_TYPE"]}
+    IFS=',' read -ra server_processes <<< "${SERVER_INFO["${server_ip}_PROCESSES"]}"
+    IFS=',' read -ra log_paths <<< "${SERVER_INFO["${server_ip}_LOG_PATHS"]}"
+    IFS=',' read -ra cfg_paths <<< "${SERVER_INFO["${server_ip}_CFG_PATHS"]}"
 
-        # 循环遍历每个进程以进行巡检
-        for index in "${!server_processes[@]}"; do
-            local proc=${server_processes[$index]}
-            local log_path=${log_paths[$index]}
-            local cfg_path=${cfg_paths[$index]}
+    echo ""
+    echo "正在巡检服务器：$server_ip, 类型：$server_type"
 
-            echo "正在巡检进程：$proc, 日志路径：$log_path, 配置文件路径：$cfg_path"
+    # 循环遍历每个进程以进行巡检
+    for index in "${!server_processes[@]}"; do
+        local proc=${server_processes[$index]}
+        local log_path=${log_paths[$index]}
+        local cfg_path=${cfg_paths[$index]}
 
-            # 调用与进程名匹配的函数来进行巡检
-            # 假设有一个名为 check_hcsserver 的函数用于检查 hcsserver 进程
-            if [ -n "$proc" ]; then
-                function_name="check_$proc"
-                if [ "$(type -t $function_name)" = "function" ]; then
-                    $function_name "$server_ip" "$log_path" &
-                    sleep $sleep_duration
-                else
-                    echo "警告：没有找到用于检查 $proc 的函数"
-                fi
+        echo "正在巡检进程：$proc, 日志路径：$log_path, 配置文件路径：$cfg_path"
+
+        # 调用与进程名匹配的函数来进行巡检
+        # 假设有一个名为 check_hcsserver 的函数用于检查 hcsserver 进程
+        if [ -n "$proc" ]; then
+            function_name="check_$proc"
+            if [ "$(type -t $function_name)" = "function" ]; then
+                $function_name "$server_ip" "$log_path"
+            else
+                echo "警告：没有找到用于检查 $proc 的函数"
             fi
-        done
+        fi
     done
+
 }
 
 
@@ -360,6 +342,8 @@ get_hcs_items() {
 
 # 主函数：获取并保存配置信息
 get_and_save_config() {
+
+    source ./cmcc_hcs.cfg
     # 从 server_type.cfg 获取所有 IP 地址
     local all_ips=$(awk -F= '/_TYPE/ {split($1, a, "_"); print a[1]}' bash/server_type.cfg | sort -u)
 
@@ -386,9 +370,9 @@ get_and_save_config() {
             for item in "${hcs_items_array[@]}"; do
                 # 获取远程服务器上的配置项的值
                 config_value=$(get_remote_config_value $ip $cfg_path $item)
-        
+                cfg_process=$(echo "$cfg_path"  | awk -F '/' '{print $(NF-2)}')
                 # 保存到新的 cfg 文件
-                save_to_new_cfg $ip $process $item $config_value
+                save_to_new_cfg $ip $cfg_process $item $config_value
             done
         done
     done

@@ -64,12 +64,12 @@ log_output() {
     fi
 
     # 使用 printf 对各字段进行格式化
-    printf "[%s]   %-9s%-20s%-20s%-30s%-30s%-10s\n" \
+    printf "[%s]   %-9s%-20s%-30s%-30s%-30s%-10s\n" \
            "$(date '+%Y-%m-%d %H:%M:%S')" "[$log_level]" "$server_ip" "$check_items" "$proc_name" "$log_file_name" "$time_diff" >> "$xunjian_log"
 
     # 如果是错误，也输出到错误日志
     if [ "$log_level" == "ERROR" ]; then
-        printf "[%s]   %-9s%-20s%-20s%-30s%-30s%-10s\n" \
+        printf "[%s]   %-9s%-20s%-30s%-30s%-30s%-10s\n" \
             "$(date '+%Y-%m-%d %H:%M:%S')" "[$log_level]" "$server_ip" "$check_items" "$proc_name" "$log_file_name" "$time_diff" >> "$xunjian_error_log"
     fi
 }
@@ -264,7 +264,7 @@ check_hcs_programs() {
             if [ -n "$proc" ]; then
                 function_name="check_$proc"
                 if [ "$(type -t $function_name)" = "function" ]; then
-                    $function_name "$server_ip" "$log_path" "$cfg_path"
+                    $function_name "$server_ip" "$log_path"
                 else
                     echo "警告：没有找到用于检查 $proc 的函数"
                 fi
@@ -279,9 +279,47 @@ get_remote_config_value() {
     local ip=$1
     local cfg_file=$2
     local config_item=$3
+
+    # 判断是否特定的配置项
+    if [ "$config_item" == "output.server" ]; then
+        # 修改 cfg_file 的名称
+        local modified_cfg_file="${cfg_file/hcsdis_myself.cfg/hcsdis_output.cfg}"
+        # 检查 modified_cfg_file 文件中是否有以有效 IP 地址开头的行
+        local ip_line_exists=$(ssh $ip "grep -E '^([0-9]{1,3}\.){3}[0-9]{1,3}' $modified_cfg_file" | tr '\n' '|')
+
+        # 去掉最后一个管道符（如果有的话）
+        ip_line_exists=${ip_line_exists%|}
+
+        # 根据是否找到了 IP 地址开头的行来返回值
+        if [ -n "$ip_line_exists" ]; then
+            echo "$ip_line_exists"
+            return
+        fi
+    fi
+
+    # 判断是否特定的配置项
+    if [ "$config_item" == "hcscore_output.cfg" ]; then
+        # 修改 cfg_file 的名称
+        local modified_cfg_file="${cfg_file/hcscore_myself.cfg/hcscore_output.cfg}"
+        # 检查 modified_cfg_file 文件中是否有以有效 IP 地址开头的行
+        local ip_line_exists=$(ssh $ip "grep -E '^([0-9]{1,3}\.){3}[0-9]{1,3}' $modified_cfg_file" | awk -F '|' '{print $1":"$2}' | tr '\n' '|')
+
+        # 去掉最后一个管道符（如果有的话）
+        ip_line_exists=${ip_line_exists%|}
+
+        # 根据是否找到了 IP 地址开头的行来返回值
+        if [ -n "$ip_line_exists" ]; then
+            echo "$ip_line_exists"
+            return
+        fi
+    fi
+
+    # 其他情况，获取指定配置项的值
     local config_value=$(ssh $ip "cat $cfg_file" | awk -F'= *' -v item="$config_item" '{gsub(/^[ \t]+|[ \t]+$/, "", $1); if ($1 == item) print $2}')
     echo "$config_value"
 }
+
+
 
 
 # 函数：将获取到的信息保存到新的cfg文件

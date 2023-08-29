@@ -18,6 +18,8 @@ secondary_menu() {
         1)
             # 在这里添加巡检系统资源的代码
             for system_target_ip in ${servers[@]}; do
+                echo ""
+                echo "正在巡检服务器：$system_target_ip, 巡检类型：系统资源"
                 system_disk_space "$system_target_ip"
                 system_date "$system_target_ip"
                 cpu_mem_io "$system_target_ip"

@@ -91,7 +91,7 @@ check_hcsdis() {
     # SDTP 文件移动路径检查
     local sdtp_move_path=$(awk -F "=" -v key="${server_ip}_hcsdis_sdtp.file.move.path" '$1==key {print $2}' "$cfg_path")
     local sdtp_file_count=$(ssh "$server_ip" "find \"$sdtp_move_path\" -mmin -10 -type f | wc -l")
-    local sdtp_file_size=$(ssh "$server_ip" "find \"$sdtp_move_path\" -mmin -10 -type f -exec du -c {} + | tail -n 1 | awk '{print \$1}'")
+    local sdtp_file_size=$(ssh "$server_ip" "find \"$sdtp_move_path\" -mmin -10 -type f -exec du {} + | awk '{ total += \$1 } END { print total }'")
 
     if [ "$sdtp_file_count" -gt 0 ]; then
         log_output "$server_ip" "SDTP_Move_Path" "hcsdis" "$sdtp_move_path" "Count:$sdtp_file_count,Size:${sdtp_file_size}K" "INFO"
@@ -207,6 +207,12 @@ check_hcscore() {
             log_output "$server_ip" "HCScore_Output_Connection" "hcscore" "$conn" "$conn_status" "ERROR"
         fi
     done
+    # 输出总的输出建链状态
+    if [ "$total_hcscore_output_connections" -gt 0 ]; then
+        log_output "$server_ip" "HCScore_Total_Output" "hcscore" "Total_Output" "$total_hcscore_output_connections" "INFO"
+    else
+        log_output "$server_ip" "HCScore_Total_Output" "hcscore" "Total_Output" "0" "ERROR"
+    fi
 }
 
 check_hcsout() {
@@ -219,7 +225,42 @@ check_hcsout() {
 
     # 然后检查日志错误
     check_log_for_errors "$server_ip" "$log_path"
+
+    # hcsout server 监听端口和建链检查
+    local hcsout_server_host=$(awk -F "=" -v key="${server_ip}_hcsout_server.host" '$1==key {print $2}' "$cfg_path")
+    local hcsout_server_ports=$(awk -F "=" -v key="${server_ip}_hcsout_server.port" '$1==key {print $2}' "$cfg_path")
+    local hcsout_server_connections=$(parse_connection_item "$hcsout_server_host:$hcsout_server_ports")
+
+    for conn in $hcsout_server_connections; do
+        local established_connections=$(ssh "$server_ip" "netstat -anp | grep \"$conn\" | grep 'hcsout' | grep 'ESTABLISHED' | wc -l")  # 统计 ESTABLISHED 状态的连接数
+        if [ "$established_connections" -gt 0 ]; then
+            log_output "$server_ip" "HCSOut_Listening" "hcsout" "$conn" "$established_connections" "INFO"
+        else
+            log_output "$server_ip" "HCSOut_Listening" "hcsout" "$conn" "0" "ERROR"
+        fi
+    done
+
+    # 落地目录检查
+    local file_path=$(awk -F "=" -v key="${server_ip}_hcsout_output.file.path" '$1==key {print $2}' "$cfg_path")
+    local nat_path=$(awk -F "=" -v key="${server_ip}_hcsout_output.nat.path" '$1==key {print $2}' "$cfg_path")
+    
+    # 如果两个落地目录一样，只检查一次
+    [ "$file_path" = "$nat_path" ] && nat_path=""
+
+    for path in $file_path $nat_path; do
+        if [ -n "$path" ]; then
+            local file_count=$(ssh "$server_ip" "find \"$path\" -mmin -10 -type f | wc -l")
+            local file_size=$(ssh "$server_ip" "find \"$path\" -mmin -10 -type f -exec du {} + | awk '{ total += \$1 } END { print total }'")
+            if [ "$file_count" -gt 0 ]; then
+                log_output "$server_ip" "HCSOut_Directory" "hcsout" "$path" "Count:$file_count,Size:${file_size}K" "INFO"
+            else
+                log_output "$server_ip" "HCSOut_Directory" "hcsout" "$path" "Count:0" "ERROR"
+            fi
+        fi
+    done
 }
+
+
 
 check_hcsnat() {
     local server_ip=$1
@@ -231,6 +272,51 @@ check_hcsnat() {
 
     # 然后检查日志错误
     check_log_for_errors "$server_ip" "$log_path"
+
+    # Redis 监听端口检查
+    local redis_listen_host=$(awk -F "=" -v key="${server_ip}_hcscore_cfg_2.redis.listen.host" '$1==key {print $2}' "$cfg_path")
+    local redis_listen_port=$(awk -F "=" -v key="${server_ip}_hcscore_cfg_2.redis.listen.port" '$1==key {print $2}' "$cfg_path")
+    local redis_listen_status=$(ssh "$server_ip" "netstat -ntlp | grep -q \"$redis_listen_host:$redis_listen_port.*LISTEN\"; echo $?")
+    local redis_listen_connections=$(ssh "$server_ip" "netstat -anp | grep \"$redis_listen_host:$redis_listen_port\" | grep 'hcsnat' | grep 'ESTABLISHED' | wc -l")
+
+    if [ "$redis_listen_status" -eq 0 ]; then
+        log_output "$server_ip" "Redis_Listening" "hcsnat" "$redis_listen_host:$redis_listen_port" "$redis_listen_connections" "INFO"
+    else
+        log_output "$server_ip" "Redis_Listening" "hcsnat" "$redis_listen_host:$redis_listen_port" "Not_Listening" "ERROR"
+    fi
+
+    # Redis 服务器建链状态检查
+    local redis_server=$(awk -F "=" -v key="${server_ip}_hcscore_cfg_2.redis.server" '$1==key {print $2}' "$cfg_path")
+    local redis_connections=$(parse_connection_item "$redis_server")
+    local total_redis_connections=0
+
+    for conn in $redis_connections; do
+        local conn_status=$(ssh "$server_ip" "netstat -anp | grep \"$conn\" | grep 'hcsnat' | grep 'ESTABLISHED' | wc -l")
+        total_redis_connections=$((total_redis_connections + conn_status))
+
+        if [ "$conn_status" -ge 1 ]; then
+            log_output "$server_ip" "Redis_Connection" "hcsnat" "$conn" "$conn_status" "INFO"
+        else
+            log_output "$server_ip" "Redis_Connection" "hcsnat" "$conn" "$conn_status" "ERROR"
+        fi
+    done
+
+    if [ "$redis_listen_connections" -ne "$total_redis_connections" ]; then
+        log_output "$server_ip" "Redis_Connections_Match" "hcsnat" "Mismatch" "${redis_listen_connections}vs${total_redis_connections}" "ERROR"
+    else
+        log_output "$server_ip" "Redis_Connections_Match" "hcsnat" "Match" "${redis_listen_connections}vs${total_redis_connections}" "INFO"
+    fi
+    # 落地文件目录检查
+    local output_file_path=$(awk -F "=" -v key="${server_ip}_hcsnat_cfg_2.output.file.path" '$1==key {print $2}' "$cfg_path")
+    
+    local file_count=$(ssh "$server_ip" "find \"$output_file_path\" -mmin -10 -type f | wc -l")
+    local file_size=$(ssh "$server_ip" "find \"$output_file_path\" -mmin -10 -type f -exec du {} + | awk '{ total += \$1 } END { print total }'")
+
+    if [ "$file_count" -gt 0 ]; then
+        log_output "$server_ip" "HCSNat_Directory" "hcsnat" "$output_file_path" "Count:$file_count,Size:${file_size}K" "INFO"
+    else
+        log_output "$server_ip" "HCSNat_Directory" "hcsnat" "$output_file_path" "Count:0" "ERROR"
+    fi
 }
 
 check_hcsredis_nat_server() {

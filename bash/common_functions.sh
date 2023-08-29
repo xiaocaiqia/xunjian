@@ -26,7 +26,7 @@ initialize_environment
 execute_commands(){
 
     local ip_file="${1:-default_ip_file}"       # IP文件路径
-    local sleep_duration="${2:-0}"              # 休眠时间
+    local sleep_duration="${2:-2}"              # 休眠时间
     local ps_hcs_path="${3:-default_path}"      # hcs程序路径
     shift 3                     # 移除前三个参数，后面的参数都是要执行的函数
     local commands=("$@")       # 获取所有要执行的函数为一个数组
@@ -234,6 +234,7 @@ display_statistics() {
 check_hcs_programs() {
     local servers=("$@")  # 将传入的所有参数作为一个数组
     local output_cfg="./bash/server_type.cfg"
+    local sleep_duration=2
     declare -A SERVER_INFO
 
     while read -r line; do
@@ -264,7 +265,8 @@ check_hcs_programs() {
             if [ -n "$proc" ]; then
                 function_name="check_$proc"
                 if [ "$(type -t $function_name)" = "function" ]; then
-                    $function_name "$server_ip" "$log_path"
+                    $function_name "$server_ip" "$log_path" &
+                    sleep $sleep_duration
                 else
                     echo "警告：没有找到用于检查 $proc 的函数"
                 fi

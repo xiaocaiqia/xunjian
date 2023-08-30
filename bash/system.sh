@@ -90,7 +90,7 @@ system_cpu(){
 
     # 使用 LANG=C 确保远程命令的输出是非本地化的
     # 获取远程服务器的CPU使用率数据（从指定的开始时间至现在）
-    local system_output=$(ssh ${ip} "LANG=C sar -u -s ${start_time}" | awk -v ip="$ip" -v check_items="$check_items" -v threshold="$threshold" '
+    local awk_output=$(ssh ${ip} "LANG=C sar -u -s ${start_time}" | awk -v ip="$ip" -v check_items="$check_items" -v threshold="$threshold" '
     {
         # 从第四行开始处理，因为之前的行可能包含其他不相关的信息（如标题行）
         if (NR >= 4){

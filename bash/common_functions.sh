@@ -188,11 +188,16 @@ display_statistics() {
         if [[ $key == *_TYPE ]]; then
             server_types[$value]=$(( ${server_types[$value]} + 1 ))
         elif [[ $key == *_PROCESSES ]]; then
+            # 对进程名进行排序
+            IFS=',' read -ra procs <<< "$value"
+            sorted_procs=$(echo "${procs[@]}" | tr ' ' '\n' | sort -u | tr '\n' ' ')
+            sorted_procs=${sorted_procs// /,}
+            sorted_procs=${sorted_procs%,}  # 移除末尾的逗号
+
             # 为进程组合计数
-            process_combinations[$value]=$(( ${process_combinations[$value]} + 1 ))
+            process_combinations[$sorted_procs]=$(( ${process_combinations[$sorted_procs]} + 1 ))
 
             # 对单个进程进行计数
-            IFS=',' read -ra procs <<< "$value"
             for proc in "${procs[@]}"; do
                 individual_processes[$proc]=$(( ${individual_processes[$proc]} + 1 ))
             done
@@ -220,6 +225,7 @@ display_statistics() {
         echo "- $proc_combination: ${process_combinations[$proc_combination]}"
     done
 }
+
 
 
 check_hcs_programs() {

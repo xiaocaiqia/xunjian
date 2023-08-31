@@ -8,9 +8,9 @@ secondary_menu() {
     local servers=("$@") # 将传入的所有参数作为一个数组
 
     # 最大并行进程数
-    max_jobs=5
+    max_jobs=20
     # 用于跟踪正在运行的进程数的文件
-    local counter_file="./counter_file.txt"
+    local counter_file="./.counter_file.txt"
     echo 0 > $counter_file
 
     printf "二级巡检菜单\n"

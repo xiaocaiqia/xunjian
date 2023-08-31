@@ -103,10 +103,10 @@ get_server_type() {
         # 通过远程命令获取所有需要的进程信息
         local processes=$(ssh "${target_ip}" "ps -ef | grep ${BASE_PATH}/" | grep -vE 'grep|xunjian|hcsmonit|cp ' | awk '{print $8}' | awk -F'/' '{print $NF, $(NF-2)}')
     
-        local proc_names=""
+        local proc_names="UNKNOWN"
         local server_type="UNKNOWN"
-        local log_paths=""
-        local cfg_paths=""
+        local log_paths="UNKNOWN"
+        local cfg_paths="UNKNOWN"
 
         # 遍历获取的进程列表，检查其对应的日志路径是否存在
         while IFS=' ' read -r process proc_path; do

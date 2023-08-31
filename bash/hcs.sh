@@ -26,8 +26,8 @@ check_hcsserver() {
     check_log_for_errors "$server_ip" "$log_path"
 
     # 使用SSH来检查远程服务器的端口和连接状态
-    local port_status=$(ssh "$server_ip" "netstat -ntlp | grep -q \"$ip:$port.*LISTEN\"; echo $?")
-    local connections=$(ssh "$server_ip" "netstat -anp | grep 'hcsserver' | grep \"$ip:$port\" | grep 'ESTABLISHED' | wc -l")
+    local port_status=$(ssh "$server_ip" "netstat -ntlp 2>&1 | grep -q \"$ip:$port.*LISTEN\"; echo $?")
+    local connections=$(ssh "$server_ip" "netstat -anp 2>&1 | grep 'hcsserver' | grep \"$ip:$port\" | grep 'ESTABLISHED' | wc -l")
 
     if [ "$port_status" -eq 0 ] && [ "$connections" -ge 1 ]; then
         log_output "$server_ip" "Probe_Listening" "${cfg_process}" "$ip:$port" "$connections" "INFO"
@@ -61,8 +61,8 @@ check_hcsdis() {
     # Redis 监听端口检查
     local redis_listen_host=$(awk -F "=" -v key="${server_ip}_${cfg_process}_redis.listen.host" '$1==key {print $2}' "$cfg_path")
     local redis_listen_port=$(awk -F "=" -v key="${server_ip}_${cfg_process}_redis.listen.port" '$1==key {print $2}' "$cfg_path")
-    local redis_listen_status=$(ssh "$server_ip" "netstat -ntlp | grep -q \"$redis_listen_host:$redis_listen_port.*LISTEN\"; echo $?")
-    local redis_listen_connections=$(ssh "$server_ip" "netstat -anp | grep \"$redis_listen_host:$redis_listen_port\" | grep 'hcsdis' | grep 'ESTABLISHED' | wc -l")
+    local redis_listen_status=$(ssh "$server_ip" "netstat -ntlp 2>&1 | grep -q \"$redis_listen_host:$redis_listen_port.*LISTEN\"; echo $?")
+    local redis_listen_connections=$(ssh "$server_ip" "netstat -anp 2>&1 | grep \"$redis_listen_host:$redis_listen_port\" | grep 'hcsdis' | grep 'ESTABLISHED' | wc -l")
 
     if [ "$redis_listen_status" -eq 0 ]; then
         log_output "$server_ip" "Redis_Listening" "${cfg_process}" "$redis_listen_host:$redis_listen_port" "$redis_listen_connections" "INFO"
@@ -76,7 +76,7 @@ check_hcsdis() {
     local total_redis_connections=0
 
     for conn in $redis_connections; do
-        local conn_status=$(ssh "$server_ip" "netstat -anp | grep 'hcsdis' | grep \"$conn\" | grep 'ESTABLISHED' | wc -l")
+        local conn_status=$(ssh "$server_ip" "netstat -anp 2>&1 | grep 'hcsdis' | grep \"$conn\" | grep 'ESTABLISHED' | wc -l")
         total_redis_connections=$((total_redis_connections + conn_status))
 
         if [ "$conn_status" -ge 1 ]; then
@@ -95,7 +95,7 @@ check_hcsdis() {
     # SDTP 文件移动路径检查
     local sdtp_move_path=$(awk -F "=" -v key="${server_ip}_${cfg_process}_sdtp.file.move.path" '$1==key {print $2}' "$cfg_path")
     local sdtp_file_count=$(ssh "$server_ip" "find \"$sdtp_move_path\" -mmin -10 -type f | wc -l")
-    local sdtp_file_size=$(ssh "$server_ip" "find \"$sdtp_move_path\" -mmin -10 -type f -exec ls -l {} + | awk '{ total += \$5 } END { print total }'")
+    local sdtp_file_size=$(ssh "$server_ip" "find \"$sdtp_move_path\" -mmin -10 -type f -exec stat -c%s {} + | awk '{ total += \$1 } END { print total }'")
 
     if [ "$sdtp_file_count" -gt 0 ]; then
         log_output "$server_ip" "SDTP_Move_Path" "${cfg_process}" "$sdtp_move_path" "Count:$sdtp_file_count,Size:${sdtp_file_size}K" "INFO"
@@ -107,7 +107,7 @@ check_hcsdis() {
     local output_server=$(awk -F "=" -v key="${server_ip}_${cfg_process}_output.server" '$1==key {print $2}' "$cfg_path")
     local output_connections=$(parse_connection_item "$output_server")
     for conn in $output_connections; do
-        local conn_status=$(ssh "$server_ip" "netstat -anp | grep 'hcsdis' | grep \"$conn\" | grep 'ESTABLISHED' | wc -l")
+        local conn_status=$(ssh "$server_ip" "netstat -anp 2>&1 | grep 'hcsdis' | grep \"$conn\" | grep 'ESTABLISHED' | wc -l")
         if [ "$conn_status" -ge 1 ]; then
             log_output "$server_ip" "Output_Connection" "${cfg_process}" "$conn" "$conn_status" "INFO"
         else
@@ -144,8 +144,8 @@ check_hcscore() {
     # Redis 监听端口检查
     local redis_listen_host=$(awk -F "=" -v key="${server_ip}_${cfg_process}_redis.listen.host" '$1==key {print $2}' "$cfg_path")
     local redis_listen_port=$(awk -F "=" -v key="${server_ip}_${cfg_process}_redis.listen.port" '$1==key {print $2}' "$cfg_path")
-    local redis_listen_status=$(ssh "$server_ip" "netstat -ntlp | grep -q \"$redis_listen_host:$redis_listen_port.*LISTEN\"; echo $?")
-    local redis_listen_connections=$(ssh "$server_ip" "netstat -anp | grep \"$redis_listen_host:$redis_listen_port\" | grep 'hcscore' | grep 'ESTABLISHED' | wc -l")
+    local redis_listen_status=$(ssh "$server_ip" "netstat -ntlp 2>&1 | grep -q \"$redis_listen_host:$redis_listen_port.*LISTEN\"; echo $?")
+    local redis_listen_connections=$(ssh "$server_ip" "netstat -anp 2>&1 | grep \"$redis_listen_host:$redis_listen_port\" | grep 'hcscore' | grep 'ESTABLISHED' | wc -l")
 
     if [ "$redis_listen_status" -eq 0 ]; then
         log_output "$server_ip" "Redis_Listening" "${cfg_process}" "$redis_listen_host:$redis_listen_port" "$redis_listen_connections" "INFO"
@@ -159,7 +159,7 @@ check_hcscore() {
     local total_redis_connections=0
 
     for conn in $redis_connections; do
-        local conn_status=$(ssh "$server_ip" "netstat -anp | grep \"$conn\" | grep 'hcscore' | grep 'ESTABLISHED' | wc -l")
+        local conn_status=$(ssh "$server_ip" "netstat -anp 2>&1 | grep \"$conn\" | grep 'hcscore' | grep 'ESTABLISHED' | wc -l")
         total_redis_connections=$((total_redis_connections + conn_status))
 
         if [ "$conn_status" -ge 1 ]; then
@@ -182,8 +182,8 @@ check_hcscore() {
     local total_hcscore_established_connections=0  # 正常建链数
 
     for conn in $hcscore_server_connections; do
-        local conn_status=$(ssh "$server_ip" "netstat -ntlp | grep -q \"$conn.*LISTEN\"; echo $?")
-        local established_connections=$(ssh "$server_ip" "netstat -anp | grep \"$conn\" | grep 'hcscore' | grep 'ESTABLISHED' | wc -l")  # 统计 ESTABLISHED 状态的连接数
+        local conn_status=$(ssh "$server_ip" "netstat -ntlp 2>&1 | grep -q \"$conn.*LISTEN\"; echo $?")
+        local established_connections=$(ssh "$server_ip" "netstat -anp 2>&1 | grep \"$conn\" | grep 'hcscore' | grep 'ESTABLISHED' | wc -l")  # 统计 ESTABLISHED 状态的连接数
 
         if [ "$conn_status" -eq 0 ]; then
             log_output "$server_ip" "HCScore_Listening" "${cfg_process}" "$conn" "Listening" "INFO"
@@ -204,7 +204,7 @@ check_hcscore() {
     local total_hcscore_output_connections=0  # 正常建链数
     
     for conn in $hcscore_output_connections; do
-        local conn_status=$(ssh "$server_ip" "netstat -anp | grep \"$conn\" | grep 'hcscore' | grep 'ESTABLISHED' | wc -l")
+        local conn_status=$(ssh "$server_ip" "netstat -anp 2>&1 | grep \"$conn\" | grep 'hcscore' | grep 'ESTABLISHED' | wc -l")
         total_hcscore_output_connections=$((total_hcscore_output_connections + conn_status))
         
         if [ "$conn_status" -ge 1 ]; then
@@ -239,7 +239,7 @@ check_hcsout() {
     local hcsout_server_connections=$(parse_connection_item "$hcsout_server_host:$hcsout_server_ports")
 
     for conn in $hcsout_server_connections; do
-        local established_connections=$(ssh "$server_ip" "netstat -anp | grep \"$conn\" | grep 'hcsout' | grep 'ESTABLISHED' | wc -l")  # 统计 ESTABLISHED 状态的连接数
+        local established_connections=$(ssh "$server_ip" "netstat -anp 2>&1 | grep \"$conn\" | grep 'hcsout' | grep 'ESTABLISHED' | wc -l")  # 统计 ESTABLISHED 状态的连接数
         if [ "$established_connections" -gt 0 ]; then
             log_output "$server_ip" "HCSOut_Listening" "${cfg_process}" "$conn" "$established_connections" "INFO"
         else
@@ -257,7 +257,7 @@ check_hcsout() {
     for path in $file_path $nat_path; do
         if [ -n "$path" ]; then
             local file_count=$(ssh "$server_ip" "find \"$path\" -mmin -10 -type f | wc -l")
-            local file_size=$(ssh "$server_ip" "find \"$path\" -mmin -10 -type f -exec ls -l {} + | awk '{ total += \$5 } END { print total }'")
+            local file_size=$(ssh "$server_ip" "find \"$path\" -mmin -10 -type f -exec stat -c%s {} + | awk '{ total += \$1 } END { print total }'")
             if [ "$file_count" -gt 0 ]; then
                 log_output "$server_ip" "HCSOut_Directory" "${cfg_process}" "$path" "Count:$file_count,Size:${file_size}K" "INFO"
             else
@@ -284,8 +284,8 @@ check_hcsnat() {
     # Redis 监听端口检查
     local redis_listen_host=$(awk -F "=" -v key="${server_ip}_${cfg_process}_cfg_2.redis.listen.host" '$1==key {print $2}' "$cfg_path")
     local redis_listen_port=$(awk -F "=" -v key="${server_ip}_${cfg_process}_cfg_2.redis.listen.port" '$1==key {print $2}' "$cfg_path")
-    local redis_listen_status=$(ssh "$server_ip" "netstat -ntlp | grep -q \"$redis_listen_host:$redis_listen_port.*LISTEN\"; echo $?")
-    local redis_listen_connections=$(ssh "$server_ip" "netstat -anp | grep \"$redis_listen_host:$redis_listen_port\" | grep 'hcsnat' | grep 'ESTABLISHED' | wc -l")
+    local redis_listen_status=$(ssh "$server_ip" "netstat -ntlp 2>&1 | grep -q \"$redis_listen_host:$redis_listen_port.*LISTEN\"; echo $?")
+    local redis_listen_connections=$(ssh "$server_ip" "netstat -anp 2>&1 | grep \"$redis_listen_host:$redis_listen_port\" | grep 'hcsnat' | grep 'ESTABLISHED' | wc -l")
 
     if [ "$redis_listen_status" -eq 0 ]; then
         log_output "$server_ip" "Redis_Listening" "${cfg_process}" "$redis_listen_host:$redis_listen_port" "$redis_listen_connections" "INFO"
@@ -299,7 +299,7 @@ check_hcsnat() {
     local total_redis_connections=0
 
     for conn in $redis_connections; do
-        local conn_status=$(ssh "$server_ip" "netstat -anp | grep \"$conn\" | grep 'hcsnat' | grep 'ESTABLISHED' | wc -l")
+        local conn_status=$(ssh "$server_ip" "netstat -anp 2>&1 | grep \"$conn\" | grep 'hcsnat' | grep 'ESTABLISHED' | wc -l")
         total_redis_connections=$((total_redis_connections + conn_status))
 
         if [ "$conn_status" -ge 1 ]; then
@@ -318,7 +318,7 @@ check_hcsnat() {
     local output_file_path=$(awk -F "=" -v key="${server_ip}_${cfg_process}_cfg_2.output.file.path" '$1==key {print $2}' "$cfg_path")
     
     local file_count=$(ssh "$server_ip" "find \"$output_file_path\" -mmin -10 -type f | wc -l")
-    local file_size=$(ssh "$server_ip" "find \"$output_file_path\" -mmin -10 -type f -exec ls -l {} + | awk '{ total += \$5 } END { print total }'")
+    local file_size=$(ssh "$server_ip" "find \"$output_file_path\" -mmin -10 -type f -exec stat -c%s {} + | awk '{ total += \$1 } END { print total }'")
 
     if [ "$file_count" -gt 0 ]; then
         log_output "$server_ip" "HCSNat_Directory" "${cfg_process}" "$output_file_path" "Count:$file_count,Size:${file_size}K" "INFO"

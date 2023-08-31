@@ -340,6 +340,32 @@ check_hcsredis_nat_server() {
     check_log_for_errors "$server_ip" "$log_path"
 }
 
+check_hcssdtpforward() {
+    local server_ip=$1
+    local log_path=$2
+    local cfg_path="bash/items_config.cfg"  # 这里硬编码了配置文件路径
+    local cfg_process=$(echo "$log_path"  | awk -F '/' '{print $(NF-2)}')
+
+    # 首先检查日志刷新时间
+    check_log_refresh_time "$server_ip" "$log_path"
+
+    # 然后检查日志错误
+    check_log_for_errors "$server_ip" "$log_path"
+}
+
+check_hcsxtp() {
+    local server_ip=$1
+    local log_path=$2
+    local cfg_path="bash/items_config.cfg"  # 这里硬编码了配置文件路径
+    local cfg_process=$(echo "$log_path"  | awk -F '/' '{print $(NF-2)}')
+
+    # 首先检查日志刷新时间
+    check_log_refresh_time "$server_ip" "$log_path"
+
+    # 然后检查日志错误
+    check_log_for_errors "$server_ip" "$log_path"
+}
+
 
 check_log_refresh_time() {
     local server_ip=$1

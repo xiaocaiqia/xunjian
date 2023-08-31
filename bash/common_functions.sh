@@ -103,10 +103,10 @@ get_server_type() {
         # 通过远程命令获取所有需要的进程信息
         local processes=$(ssh "${target_ip}" "ps -ef | grep ${BASE_PATH}/" | grep -vE 'grep|xunjian|hcsmonit|cp ' | awk '{print $8}' | awk -F'/' '{print $NF, $(NF-2)}')
     
-        local proc_names="UNKNOWN"
+        local proc_names=""
         local server_type="UNKNOWN"
-        local log_paths="UNKNOWN"
-        local cfg_paths="UNKNOWN"
+        local log_paths=""
+        local cfg_paths=""
 
         # 遍历获取的进程列表，检查其对应的日志路径是否存在
         while IFS=' ' read -r process proc_path; do
@@ -130,15 +130,22 @@ get_server_type() {
         # 如果不存在，则直接追加新内容
         if grep -q "${target_ip}_TYPE=" $output_cfg; then
             sed -i "s|${target_ip}_TYPE=.*|${target_ip}_TYPE=${server_type}|g" $output_cfg
-            sed -i "s|${target_ip}_PROCESSES=.*|${target_ip}_PROCESSES=${proc_names}|g" $output_cfg
-            sed -i "s|${target_ip}_LOG_PATHS=.*|${target_ip}_LOG_PATHS=${log_paths%,}|g" $output_cfg
-            sed -i "s|${target_ip}_CFG_PATHS=.*|${target_ip}_CFG_PATHS=${cfg_paths%,}|g" $output_cfg
+            if [ -n "$proc_names" ]; then  # -n 测试变量是否非空
+                sed -i "s|${target_ip}_PROCESSES=.*|${target_ip}_PROCESSES=${proc_names}|g" $output_cfg
+                sed -i "s|${target_ip}_LOG_PATHS=.*|${target_ip}_LOG_PATHS=${log_paths%,}|g" $output_cfg
+                sed -i "s|${target_ip}_CFG_PATHS=.*|${target_ip}_CFG_PATHS=${cfg_paths%,}|g" $output_cfg
+            fi
+            
         else
             echo "${target_ip}_TYPE=${server_type}" >> $output_cfg
-            echo "${target_ip}_PROCESSES=${proc_names}" >> $output_cfg
-            echo "${target_ip}_LOG_PATHS=${log_paths%,}" >> $output_cfg
-            echo "${target_ip}_CFG_PATHS=${cfg_paths%,}" >> $output_cfg
+            if [ -n "$proc_names" ]; then  # -n 测试变量是否非空
+                echo "${target_ip}_PROCESSES=${proc_names}" >> $output_cfg
+                echo "${target_ip}_LOG_PATHS=${log_paths%,}" >> $output_cfg
+                echo "${target_ip}_CFG_PATHS=${cfg_paths%,}" >> $output_cfg
+            fi
+
         fi
+
     done
 }
 

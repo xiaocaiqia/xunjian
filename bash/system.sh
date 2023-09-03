@@ -10,8 +10,9 @@ system_disk_space() {
     local check_items="disk_space"
     # 定义警告阈值
     local threshold=80
-    # 定义要排除的挂载点，使用正则确保完全匹配
-    local exclude_mounts=("^/mnt$" "^/other/mount1$" "^/other/mount2$")
+    # 导入要排除的挂载点exclude_mounts
+    source ./bash/cmcc_hcs.cfg
+    
 
     # 将排除的挂载点连接成一个正则表达式
     local exclude_pattern=$(IFS="|"; echo "${exclude_mounts[*]}")

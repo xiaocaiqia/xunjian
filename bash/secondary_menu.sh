@@ -3,12 +3,13 @@
 source ./bash/system.sh
 source ./bash/hcs.sh
 
+
 # 二级菜单函数
 secondary_menu() {
     local servers=("$@") # 将传入的所有参数作为一个数组
 
-    # 最大并行进程数
-    max_jobs=20
+    # 导入最大并行进程数配置max_jobs
+    source ./bash/cmcc_hcs.cfg
     # 用于跟踪正在运行的进程数的文件
     local counter_file="./.counter_file.txt"
     echo 0 > $counter_file

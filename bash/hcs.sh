@@ -402,7 +402,7 @@ check_log_for_errors() {
     local proc_name=$(basename "$(dirname "$(dirname "$log_path")")")
 
     # 使用 ssh 和 grep 在远程服务器上搜索包含 "ERROR" 的行，并取最后一行
-    local last_error_line=$(ssh "$server_ip" "grep 'ERROR' '$log_path' | tail -n 1")
+    local last_error_line=$(ssh "$server_ip" "grep -e 'ERROR' -e '^E' '$log_path' | tail -n 1")
 
     # 使用base64对last_error_line进行编码
     local encoded_last_error_line="BASE64:$(echo -n "[$last_error_line]" | base64)"

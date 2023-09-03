@@ -11,7 +11,7 @@ system_disk_space() {
     # 定义警告阈值
     local threshold=80
     # 导入要排除的挂载点exclude_mounts
-    source ./bash/cmcc_hcs.cfg
+    source ./cmcc_hcs.cfg
     
 
     # 将排除的挂载点连接成一个正则表达式

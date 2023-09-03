@@ -80,9 +80,9 @@ check_hcsdis() {
         total_redis_connections=$((total_redis_connections + conn_status))
 
         if [ "$conn_status" -ge 1 ]; then
-            log_output "$server_ip" "Redis_Connection" "${cfg_process}" "$conn" "$conn_status" "INFO"
+            log_output "$server_ip" "Redis_Connection" "${cfg_process}" "$conn" "ESTABLISHED" "INFO"
         else
-            log_output "$server_ip" "Redis_Connection" "${cfg_process}" "$conn" "$conn_status" "ERROR"
+            log_output "$server_ip" "Redis_Connection" "${cfg_process}" "$conn" "CLOSED" "ERROR"
         fi
     done
 
@@ -106,14 +106,22 @@ check_hcsdis() {
     # 输出服务器建链状态检查
     local output_server=$(awk -F "=" -v key="${server_ip}_${cfg_process}_output.server" '$1==key {print $2}' "$cfg_path")
     local output_connections=$(parse_connection_item "$output_server")
+    local total_hcsdis_output_connections=0  # 正常建链数
     for conn in $output_connections; do
         local conn_status=$(ssh "$server_ip" "netstat -anp 2>&1 | grep 'hcsdis' | grep \"$conn\" | grep 'ESTABLISHED' | wc -l")
+        total_hcsdis_output_connections=$((total_hcsdis_output_connections + conn_status))
         if [ "$conn_status" -ge 1 ]; then
-            log_output "$server_ip" "Output_Connection" "${cfg_process}" "$conn" "$conn_status" "INFO"
+            log_output "$server_ip" "Output_Connection" "${cfg_process}" "$conn" "ESTABLISHED" "INFO"
         else
-            log_output "$server_ip" "Output_Connection" "${cfg_process}" "$conn" "$conn_status" "ERROR"
+            log_output "$server_ip" "Output_Connection" "${cfg_process}" "$conn" "CLOSED" "ERROR"
         fi
     done
+    # 输出总的输出建链状态
+    if [ "$total_hcsdis_output_connections" -gt 0 ]; then
+        log_output "$server_ip" "Total_Output" "${cfg_process}" "Total_Output" "$total_hcsdis_output_connections" "INFO"
+    else
+        log_output "$server_ip" "Total_Output" "${cfg_process}" "Total_Output" "$total_hcsdis_output_connections" "ERROR"
+    fi
 }
 
 check_hcs_redis_server() {
@@ -163,9 +171,9 @@ check_hcscore() {
         total_redis_connections=$((total_redis_connections + conn_status))
 
         if [ "$conn_status" -ge 1 ]; then
-            log_output "$server_ip" "Redis_Connection" "${cfg_process}" "$conn" "$conn_status" "INFO"
+            log_output "$server_ip" "Redis_Connection" "${cfg_process}" "$conn" "ESTABLISHED" "INFO"
         else
-            log_output "$server_ip" "Redis_Connection" "${cfg_process}" "$conn" "$conn_status" "ERROR"
+            log_output "$server_ip" "Redis_Connection" "${cfg_process}" "$conn" "CLOSED" "ERROR"
         fi
     done
 
@@ -202,9 +210,9 @@ check_hcscore() {
         total_hcscore_output_connections=$((total_hcscore_output_connections + conn_status))
         
         if [ "$conn_status" -ge 1 ]; then
-            log_output "$server_ip" "Output_Connection" "${cfg_process}" "$conn" "$conn_status" "INFO"
+            log_output "$server_ip" "Output_Connection" "${cfg_process}" "$conn" "ESTABLISHED" "INFO"
         else
-            log_output "$server_ip" "Output_Connection" "${cfg_process}" "$conn" "$conn_status" "ERROR"
+            log_output "$server_ip" "Output_Connection" "${cfg_process}" "$conn" "CLOSED" "ERROR"
         fi
     done
     # 输出总的输出建链状态
@@ -299,9 +307,9 @@ check_hcsnat() {
         total_redis_connections=$((total_redis_connections + conn_status))
 
         if [ "$conn_status" -ge 1 ]; then
-            log_output "$server_ip" "Redis_Connection" "${cfg_process}" "$conn" "$conn_status" "INFO"
+            log_output "$server_ip" "Redis_Connection" "${cfg_process}" "$conn" "ESTABLISHED" "INFO"
         else
-            log_output "$server_ip" "Redis_Connection" "${cfg_process}" "$conn" "$conn_status" "ERROR"
+            log_output "$server_ip" "Redis_Connection" "${cfg_process}" "$conn" "CLOSED" "ERROR"
         fi
     done
 

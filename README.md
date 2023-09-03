@@ -14,7 +14,7 @@
   - [功能菜单](#功能菜单)
   - [二级菜单](#二级菜单)
 - [问题](#问题)
-
+- [巡检脚本Log解释](#巡检脚本log解释)
 
 ## 简介
 
@@ -86,3 +86,25 @@
 ## 问题
 
 1. 初始化也要考虑做成并行执行
+
+## 巡检脚本Log解释
+
+|时间|IP|日志级别|检查项类型|自定义|自定义|巡检结果|
+|-|-|-|-|-|-|-|
+||||disk_space|文件系统|挂载目录|使用率|
+||||date|NONE|NONE|时差|
+||||cpu|NONE|检查时间|使用率|
+||||mem|NONE|检查时间|使用率|
+||||disk_io|磁盘分区|检查时间|使用率|
+||||not_sysstat|NONE|NONE|NONE|
+||||Log_Refresh_Time|程序名|日志文件名|时差|
+||||Log_Errors|程序名|日志文件名|最新一条error日志或空|
+||||SDTP_Path|程序名|hcsserver落地目录|文件数|
+||||SDTP_Move_Path|程序名|hcsdis转移目录|文件数量,文件大小|
+||||HCSOut_Directory|程序名|hcsout落地目录|文件数量,文件大小|
+||||HCSNat_Directory|程序名|hcsnat落地目录|文件数量,文件大小|
+||||Listening|程序名|IP:端口|监听端口的建联数|
+||||Redis_Connection|程序名|IP:端口|ESTABLISHED/CLOSED|
+||||Redis_Connections_Match|程序名|Mismatch/Match|监听端口建联数vs主动与redis建联数|
+||||Output_Connection|程序名|IP:端口|ESTABLISHED/CLOSED|
+||||Total_Output|程序名|Total_Output|总输出建联数|

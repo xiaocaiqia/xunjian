@@ -47,12 +47,12 @@ log_output() {
     # 使用 printf 对各字段进行格式化，并通过 flock 加锁
     (
         flock -x 200
-        printf "[%s]   %-9s%-20s%-30s%-30s%-30s%-10s\n" \
+        printf "[%s]   %-9s%-20s%-30s%-30s%-45s%-10s\n" \
                "$(date '+%Y-%m-%d %H:%M:%S')" "[$log_level]" "$server_ip" "$check_items" "$proc_name" "$log_file_name" "$time_diff" >> "$xunjian_log"
 
         # 如果是错误，也输出到错误日志
         if [ "$log_level" == "ERROR" ]; then
-            printf "[%s]   %-9s%-20s%-30s%-30s%-30s%-10s\n" \
+            printf "[%s]   %-9s%-20s%-30s%-30s%-45s%-10s\n" \
                 "$(date '+%Y-%m-%d %H:%M:%S')" "[$log_level]" "$server_ip" "$check_items" "$proc_name" "$log_file_name" "$time_diff" >> "$xunjian_error_log"
         fi
     ) 200> $lock_file

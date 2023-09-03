@@ -30,9 +30,9 @@ check_hcsserver() {
     local connections=$(ssh "$server_ip" "netstat -anp 2>&1 | grep 'hcsserver' | grep \"$ip:$port\" | grep 'ESTABLISHED' | wc -l")
 
     if [ "$port_status" -eq 0 ] && [ "$connections" -ge 1 ]; then
-        log_output "$server_ip" "Probe_Listening" "${cfg_process}" "$ip:$port" "$connections" "INFO"
+        log_output "$server_ip" "Listening" "${cfg_process}" "$ip:$port" "$connections" "INFO"
     else
-        log_output "$server_ip" "Probe_Listening" "${cfg_process}" "$ip:$port" "$connections" "ERROR"
+        log_output "$server_ip" "Listening" "${cfg_process}" "$ip:$port" "$connections" "ERROR"
     fi
 
     # 检查远程服务器上落地目录下的文件数量
@@ -64,10 +64,10 @@ check_hcsdis() {
     local redis_listen_status=$(ssh "$server_ip" "netstat -ntlp 2>&1 | grep -q \"$redis_listen_host:$redis_listen_port.*LISTEN\"; echo $?")
     local redis_listen_connections=$(ssh "$server_ip" "netstat -anp 2>&1 | grep \"$redis_listen_host:$redis_listen_port\" | grep 'hcsdis' | grep 'ESTABLISHED' | wc -l")
 
-    if [ "$redis_listen_status" -eq 0 ]; then
-        log_output "$server_ip" "Redis_Listening" "${cfg_process}" "$redis_listen_host:$redis_listen_port" "$redis_listen_connections" "INFO"
+    if [ "$redis_listen_status" -eq 0 ] && [ "$redis_listen_connections" -ge 1 ]; then
+        log_output "$server_ip" "Listening" "${cfg_process}" "$redis_listen_host:$redis_listen_port" "$redis_listen_connections" "INFO"
     else
-        log_output "$server_ip" "Redis_Listening" "${cfg_process}" "$redis_listen_host:$redis_listen_port" "Not_Listening" "ERROR"
+        log_output "$server_ip" "Listening" "${cfg_process}" "$redis_listen_host:$redis_listen_port" "$redis_listen_connections" "ERROR"
     fi
 
     # Redis 服务器建链状态检查
@@ -147,10 +147,10 @@ check_hcscore() {
     local redis_listen_status=$(ssh "$server_ip" "netstat -ntlp 2>&1 | grep -q \"$redis_listen_host:$redis_listen_port.*LISTEN\"; echo $?")
     local redis_listen_connections=$(ssh "$server_ip" "netstat -anp 2>&1 | grep \"$redis_listen_host:$redis_listen_port\" | grep 'hcscore' | grep 'ESTABLISHED' | wc -l")
 
-    if [ "$redis_listen_status" -eq 0 ]; then
-        log_output "$server_ip" "Redis_Listening" "${cfg_process}" "$redis_listen_host:$redis_listen_port" "$redis_listen_connections" "INFO"
+    if [ "$redis_listen_status" -eq 0 ] && [ "$redis_listen_connections" -ge 1 ]; then
+        log_output "$server_ip" "Listening" "${cfg_process}" "$redis_listen_host:$redis_listen_port" "$redis_listen_connections" "INFO"
     else
-        log_output "$server_ip" "Redis_Listening" "${cfg_process}" "$redis_listen_host:$redis_listen_port" "Not_Listening" "ERROR"
+        log_output "$server_ip" "Listening" "${cfg_process}" "$redis_listen_host:$redis_listen_port" "$redis_listen_connections" "ERROR"
     fi
 
     # Redis 服务器建链状态检查
@@ -185,19 +185,13 @@ check_hcscore() {
         local conn_status=$(ssh "$server_ip" "netstat -ntlp 2>&1 | grep -q \"$conn.*LISTEN\"; echo $?")
         local established_connections=$(ssh "$server_ip" "netstat -anp 2>&1 | grep \"$conn\" | grep 'hcscore' | grep 'ESTABLISHED' | wc -l")  # 统计 ESTABLISHED 状态的连接数
 
-        if [ "$conn_status" -eq 0 ]; then
-            log_output "$server_ip" "HCScore_Listening" "${cfg_process}" "$conn" "Listening" "INFO"
+        if [ "$conn_status" -eq 0 ] && [ "$established_connections" -ge 1 ]; then
+            log_output "$server_ip" "Listening" "${cfg_process}" "$conn" "$established_connections" "INFO"
         else
-            log_output "$server_ip" "HCScore_Listening" "${cfg_process}" "$conn" "Not_Listening" "ERROR"
+            log_output "$server_ip" "Listening" "${cfg_process}" "$conn" "$established_connections" "ERROR"
         fi
     done
 
-    # 输出总的 ESTABLISHED 连接数
-    if [ "$total_hcscore_established_connections" -gt 0 ]; then
-        log_output "$server_ip" "HCScore_Listening_Established" "${cfg_process}" "Listening_Established" "$total_hcscore_established_connections" "INFO"
-    else
-        log_output "$server_ip" "HCScore_Listening_Established" "${cfg_process}" "Listening_Established" "0" "ERROR"
-    fi
     # 新增：HCScore 输出建链状态检查
     local hcscore_output=$(awk -F "=" -v key="${server_ip}_${cfg_process}_hcscore_output.cfg" '$1==key {print $2}' "$cfg_path")
     local hcscore_output_connections=$(parse_connection_item "$hcscore_output")
@@ -208,16 +202,16 @@ check_hcscore() {
         total_hcscore_output_connections=$((total_hcscore_output_connections + conn_status))
         
         if [ "$conn_status" -ge 1 ]; then
-            log_output "$server_ip" "HCScore_Output_Connection" "${cfg_process}" "$conn" "$conn_status" "INFO"
+            log_output "$server_ip" "Output_Connection" "${cfg_process}" "$conn" "$conn_status" "INFO"
         else
-            log_output "$server_ip" "HCScore_Output_Connection" "${cfg_process}" "$conn" "$conn_status" "ERROR"
+            log_output "$server_ip" "Output_Connection" "${cfg_process}" "$conn" "$conn_status" "ERROR"
         fi
     done
     # 输出总的输出建链状态
     if [ "$total_hcscore_output_connections" -gt 0 ]; then
-        log_output "$server_ip" "HCScore_Total_Output" "${cfg_process}" "Total_Output" "$total_hcscore_output_connections" "INFO"
+        log_output "$server_ip" "Total_Output" "${cfg_process}" "Total_Output" "$total_hcscore_output_connections" "INFO"
     else
-        log_output "$server_ip" "HCScore_Total_Output" "${cfg_process}" "Total_Output" "0" "ERROR"
+        log_output "$server_ip" "Total_Output" "${cfg_process}" "Total_Output" "0" "ERROR"
     fi
 }
 
@@ -239,11 +233,13 @@ check_hcsout() {
     local hcsout_server_connections=$(parse_connection_item "$hcsout_server_host:$hcsout_server_ports")
 
     for conn in $hcsout_server_connections; do
+        local conn_status=$(ssh "$server_ip" "netstat -ntlp 2>&1 | grep -q \"$conn.*LISTEN\"; echo $?")
         local established_connections=$(ssh "$server_ip" "netstat -anp 2>&1 | grep \"$conn\" | grep 'hcsout' | grep 'ESTABLISHED' | wc -l")  # 统计 ESTABLISHED 状态的连接数
-        if [ "$established_connections" -gt 0 ]; then
-            log_output "$server_ip" "HCSOut_Listening" "${cfg_process}" "$conn" "$established_connections" "INFO"
+
+        if [ "$conn_status" -eq 0 ] && [ "$established_connections" -ge 1 ]; then
+            log_output "$server_ip" "Listening" "${cfg_process}" "$conn" "$established_connections" "INFO"
         else
-            log_output "$server_ip" "HCSOut_Listening" "${cfg_process}" "$conn" "0" "ERROR"
+            log_output "$server_ip" "Listening" "${cfg_process}" "$conn" "$established_connections" "ERROR"
         fi
     done
 
@@ -287,10 +283,10 @@ check_hcsnat() {
     local redis_listen_status=$(ssh "$server_ip" "netstat -ntlp 2>&1 | grep -q \"$redis_listen_host:$redis_listen_port.*LISTEN\"; echo $?")
     local redis_listen_connections=$(ssh "$server_ip" "netstat -anp 2>&1 | grep \"$redis_listen_host:$redis_listen_port\" | grep 'hcsnat' | grep 'ESTABLISHED' | wc -l")
 
-    if [ "$redis_listen_status" -eq 0 ]; then
-        log_output "$server_ip" "Redis_Listening" "${cfg_process}" "$redis_listen_host:$redis_listen_port" "$redis_listen_connections" "INFO"
+    if [ "$redis_listen_status" -eq 0 ] && [ "$redis_listen_connections" -ge 1 ]; then
+        log_output "$server_ip" "Listening" "${cfg_process}" "$redis_listen_host:$redis_listen_port" "$redis_listen_connections" "INFO"
     else
-        log_output "$server_ip" "Redis_Listening" "${cfg_process}" "$redis_listen_host:$redis_listen_port" "Not_Listening" "ERROR"
+        log_output "$server_ip" "Listening" "${cfg_process}" "$redis_listen_host:$redis_listen_port" "$redis_listen_connections" "ERROR"
     fi
 
     # Redis 服务器建链状态检查

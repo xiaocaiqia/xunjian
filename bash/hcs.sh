@@ -8,6 +8,9 @@ check_hcsserver() {
     local log_path=$2
     local cfg_path="bash/items_config.cfg"  # 这里硬编码了配置文件路径
     local cfg_process=$(echo "$log_path"  | awk -F '/' '{print $(NF-2)}')
+    # 使用SSH来检查远程服务器的端口和连接状态
+    local port_status
+    local connections
 
     # 获取IP, 端口和落地目录
     local ip=$(awk -F "=" -v key="${server_ip}_${cfg_process}_hcsserver.serverip" '$1==key {print $2}' "$cfg_path")
@@ -26,9 +29,14 @@ check_hcsserver() {
     check_log_for_errors "$server_ip" "$log_path"
 
     # 使用SSH来检查远程服务器的端口和连接状态
-    local port_status=$(ssh "$server_ip" "netstat -ntlp 2>&1 | grep -q \"$ip:$port.*LISTEN\"; echo $?")
-    local connections=$(ssh "$server_ip" "netstat -anp 2>&1 | grep 'hcsserver' | grep \"$ip:$port\" | grep 'ESTABLISHED' | wc -l")
-
+    if [ "$ip" == "0.0.0.0" ]; then
+        port_status=$(ssh "$server_ip" "netstat -ntlp 2>&1 | grep -q \":$port.*LISTEN\"; echo $?")
+        connections=$(ssh "$server_ip" "netstat -anp 2>&1 | grep 'hcsserver' | grep \":$port\" | grep 'ESTABLISHED' | wc -l")
+    else
+        port_status=$(ssh "$server_ip" "netstat -ntlp 2>&1 | grep -q \"$ip:$port.*LISTEN\"; echo $?")
+        connections=$(ssh "$server_ip" "netstat -anp 2>&1 | grep 'hcsserver' | grep \"$ip:$port\" | grep 'ESTABLISHED' | wc -l")
+    fi
+    
     if [ "$port_status" -eq 0 ] && [ "$connections" -ge 1 ]; then
         log_output "$server_ip" "Listening" "${cfg_process}" "$ip:$port" "$connections" "INFO"
     else

@@ -304,8 +304,8 @@ check_hcsoutx() {
     done
 
     # 落地目录检查
-    local file_path=$(awk -F "=" -v key="${server_ip}_${cfg_process}_output.file.path" '$1==key {print $2}' "$cfg_path")
-    local nat_path=$(awk -F "=" -v key="${server_ip}_${cfg_process}_output.nat.path" '$1==key {print $2}' "$cfg_path")
+    local file_path=$(awk -F "=" -v key="${server_ip}_${cfg_process}_output.file.dpi.path" '$1==key {print $2}' "$cfg_path")
+    local nat_path=$(awk -F "=" -v key="${server_ip}_${cfg_process}_output.file.nat.path" '$1==key {print $2}' "$cfg_path")
     
     # 如果两个落地目录一样，只检查一次
     [ "$file_path" = "$nat_path" ] && nat_path=""
@@ -321,6 +321,32 @@ check_hcsoutx() {
             fi
         fi
     done
+
+    # kafka建联检查
+    local kafka_enable=$(awk -F "=" -v key="${server_ip}_${cfg_process}_kafka.output.zmq.enable" '$1==key {print $2}' "$cfg_path")
+    if [ "$kafka_enable" = "enable" ]; then
+        local kafka_server=$(awk -F "=" -v key="${server_ip}_${cfg_process}_kafka.output.zmq.server" '$1==key {print $2}' "$cfg_path")
+        kafka_server=$(echo "$kafka_server" | tr ';' '|')
+        local hcsoutx_output_connections=$(parse_connection_item "$kafka_server")
+        local total_hcsoutx_output_connections=0  # 正常建链数
+    
+        for conn in $hcsoutx_output_connections; do
+            local conn_status=$(ssh "$server_ip" "netstat -anp 2>&1 | grep \"$conn\" | grep 'hcsoutx' | grep 'ESTABLISHED' | wc -l")
+            total_hcsoutx_output_connections=$((total_hcsoutx_output_connections + conn_status))
+        
+            if [ "$conn_status" -ge 1 ]; then
+                log_output "$server_ip" "Output_Connection" "${cfg_process}" "$conn" "ESTABLISHED" "INFO"
+            else
+                log_output "$server_ip" "Output_Connection" "${cfg_process}" "$conn" "CLOSED" "ERROR"
+            fi
+        done
+        # 输出总的输出建链状态
+        if [ "$total_hcsoutx_output_connections" -gt 0 ]; then
+            log_output "$server_ip" "Total_Output" "${cfg_process}" "Total_Output" "$total_hcsoutx_output_connections" "INFO"
+        else
+            log_output "$server_ip" "Total_Output" "${cfg_process}" "Total_Output" "0" "ERROR"
+        fi
+    fi
 }
 
 

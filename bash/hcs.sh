@@ -63,9 +63,9 @@ check_hcsserver() {
             total_realtime_connections=$((total_realtime_connections + conn_status))
 
             if [ "$conn_status" -ge 1 ]; then
-                log_output "$server_ip" "Total_Output" "${cfg_process}" "$conn" "ESTABLISHED" "INFO"
+                log_output "$server_ip" "Output_Connection" "${cfg_process}" "$conn" "ESTABLISHED" "INFO"
             else
-                log_output "$server_ip" "Total_Output" "${cfg_process}" "$conn" "CLOSED" "ERROR"
+                log_output "$server_ip" "Output_Connection" "${cfg_process}" "$conn" "CLOSED" "ERROR"
             fi
         done
     fi
@@ -117,11 +117,6 @@ check_hcsdis() {
         fi
     done
 
-    if [ "$redis_listen_connections" -ne "$total_redis_connections" ]; then
-        log_output "$server_ip" "Redis_Connections_Match" "${cfg_process}" "Mismatch" "${redis_listen_connections}vs${total_redis_connections}" "ERROR"
-    else
-        log_output "$server_ip" "Redis_Connections_Match" "${cfg_process}" "Match" "${redis_listen_connections}vs${total_redis_connections}" "INFO"
-    fi
 
     
 
@@ -253,7 +248,7 @@ check_hcscore() {
     done
 
     # 新增：HCScore 输出建链状态检查
-    local hcscore_output=$(awk -F "=" -v key="${server_ip}_${cfg_process}_hcscore_output.cfg" '$1==key {print $2}' "$cfg_path")
+    local hcscore_output=$(awk -F "=" -v key="${server_ip}_${cfg_process}_output.server" '$1==key {print $2}' "$cfg_path")
     local hcscore_output_connections=$(parse_connection_item "$hcscore_output")
     local total_hcscore_output_connections=0  # 正常建链数
     
@@ -324,7 +319,7 @@ check_hcsoutx() {
 
     # kafka建联检查
     local kafka_enable=$(awk -F "=" -v key="${server_ip}_${cfg_process}_kafka.output.zmq.enable" '$1==key {print $2}' "$cfg_path")
-    if [ "$kafka_enable" = "enable" ]; then
+    if [ "$kafka_enable" = "true" ]; then
         local kafka_server=$(awk -F "=" -v key="${server_ip}_${cfg_process}_kafka.output.zmq.server" '$1==key {print $2}' "$cfg_path")
         kafka_server=$(echo "$kafka_server" | tr ';' '|')
         local hcsoutx_output_connections=$(parse_connection_item "$kafka_server")
@@ -351,7 +346,7 @@ check_hcsoutx() {
 
 
 
-check_hcsnat() {
+check_hcskafka() {
     local server_ip=$1
     local log_path=$2
     local cfg_path="bash/items_config.cfg"  # 这里硬编码了配置文件路径
@@ -363,50 +358,6 @@ check_hcsnat() {
     # 然后检查日志错误
     check_log_for_errors "$server_ip" "$log_path"
 
-    # Redis 监听端口检查
-    local redis_listen_host=$(awk -F "=" -v key="${server_ip}_${cfg_process}_cfg_2.redis.listen.host" '$1==key {print $2}' "$cfg_path")
-    local redis_listen_port=$(awk -F "=" -v key="${server_ip}_${cfg_process}_cfg_2.redis.listen.port" '$1==key {print $2}' "$cfg_path")
-    local redis_listen_status=$(ssh "$server_ip" "netstat -ntlp 2>&1 | grep -q \"$redis_listen_host:$redis_listen_port.*LISTEN\"; echo $?")
-    local redis_listen_connections=$(ssh "$server_ip" "netstat -anp 2>&1 | grep \"$redis_listen_host:$redis_listen_port\" | grep 'hcsnat' | grep 'ESTABLISHED' | wc -l")
-
-    if [ "$redis_listen_status" -eq 0 ] && [ "$redis_listen_connections" -ge 1 ]; then
-        log_output "$server_ip" "Listening" "${cfg_process}" "$redis_listen_host:$redis_listen_port" "$redis_listen_connections" "INFO"
-    else
-        log_output "$server_ip" "Listening" "${cfg_process}" "$redis_listen_host:$redis_listen_port" "$redis_listen_connections" "ERROR"
-    fi
-
-    # Redis 服务器建链状态检查
-    local redis_server=$(awk -F "=" -v key="${server_ip}_${cfg_process}_cfg_2.redis.server" '$1==key {print $2}' "$cfg_path")
-    local redis_connections=$(parse_connection_item "$redis_server")
-    local total_redis_connections=0
-
-    for conn in $redis_connections; do
-        local conn_status=$(ssh "$server_ip" "netstat -anp 2>&1 | grep \"$conn\" | grep 'hcsnat' | grep 'ESTABLISHED' | wc -l")
-        total_redis_connections=$((total_redis_connections + conn_status))
-
-        if [ "$conn_status" -ge 1 ]; then
-            log_output "$server_ip" "Redis_Connection" "${cfg_process}" "$conn" "ESTABLISHED" "INFO"
-        else
-            log_output "$server_ip" "Redis_Connection" "${cfg_process}" "$conn" "CLOSED" "ERROR"
-        fi
-    done
-
-    if [ "$redis_listen_connections" -ne "$total_redis_connections" ]; then
-        log_output "$server_ip" "Redis_Connections_Match" "${cfg_process}" "Mismatch" "${redis_listen_connections}vs${total_redis_connections}" "ERROR"
-    else
-        log_output "$server_ip" "Redis_Connections_Match" "${cfg_process}" "Match" "${redis_listen_connections}vs${total_redis_connections}" "INFO"
-    fi
-    # 落地文件目录检查
-    local output_file_path=$(awk -F "=" -v key="${server_ip}_${cfg_process}_cfg_2.output.file.path" '$1==key {print $2}' "$cfg_path")
-    
-    local file_count=$(ssh "$server_ip" "find \"$output_file_path\" -mmin -10 -type f | wc -l")
-    local file_size=$(ssh "$server_ip" "find \"$output_file_path\" -mmin -10 -type f -exec stat -c%s {} + | awk '{ total += \$1 } END { print total }'")
-
-    if [ "$file_count" -gt 0 ]; then
-        log_output "$server_ip" "HCSNat_Directory" "${cfg_process}" "$output_file_path" "Count:$file_count,Size:${file_size}K" "INFO"
-    else
-        log_output "$server_ip" "HCSNat_Directory" "${cfg_process}" "$output_file_path" "Count:0" "ERROR"
-    fi
 }
 
 check_hcsredis_nat_server() {

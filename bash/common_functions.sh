@@ -278,7 +278,7 @@ get_remote_config_value() {
     local config_item=$3
 
     # 判断是否特定的配置项
-    if [ "$config_item" == "output.server" ]; then
+    if [ "$config_item" == "output.server" ] && [[ $cfg_file == *hcsdis* ]]; then
         # 修改 cfg_file 的名称
         local modified_cfg_file="${cfg_file/hcsdis_myself.cfg/hcsdis_output.cfg}"
         # 检查 modified_cfg_file 文件中是否有以有效 IP 地址开头的行
